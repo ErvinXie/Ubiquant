@@ -18,6 +18,7 @@ enum Type {
     FOK = 5,          // 全额成交或撤销
 };
 
+// 订单
 struct Order {
     uint32_t order_id;
     Direction dir;
@@ -26,6 +27,7 @@ struct Order {
     uint32_t volume;
 };
 
+// 成交记录
 struct Trade {
     uint32_t bid_id;    // 买方id
     uint32_t trade_id;  // 卖方id
@@ -33,6 +35,7 @@ struct Trade {
     uint32_t volume;
 };
 
+// 单支股票的撮合器
 struct Exchanger {
     // add exchanger definition
 
