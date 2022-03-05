@@ -1,7 +1,7 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -g
+CXXFLAGS = -std=c++17 -Wall -ggdb -fsanitize=undefined,thread
 LD = g++
-LDFLAGS = -std=c++17 -g
+LDFLAGS = $(CXXFLAGS)
 HDF5 = /opt/anaconda3/bin/h5c++
 
 all: exchange ubi-read-test

@@ -12,7 +12,7 @@ using std::uint32_t;
 using std::uint8_t;
 using std::vector;
 
-constexpr size_t CHUNK_SIZE = 10 * 4096;
+constexpr size_t CHUNK_SIZE = 64 * 1024;
 
 struct Packet {
     uint32_t shard;

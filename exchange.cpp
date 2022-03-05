@@ -10,7 +10,7 @@ using std::make_shared;
 using std::mutex;
 using std::unique_lock;
 
-class MPMC final : PacketSink, PacketStream {
+class MPMC final : public PacketSink, public PacketStream {
     condition_variable cv;
     mutex mtx;
     deque<Packet> queue;
@@ -38,7 +38,7 @@ class MPMC final : PacketSink, PacketStream {
     friend class MPMCRequeue;
 };
 
-class MPMCRequeue : PacketSink {
+class MPMCRequeue final : public PacketSink {
     shared_ptr<MPMC> queue;
 
     virtual void send(Packet packet) override { queue->requeue(std::move(packet)); }
@@ -48,5 +48,8 @@ class MPMCRequeue : PacketSink {
 };
 
 shared_ptr<MPMC> mpmc = make_shared<MPMC>();
+shared_ptr<MPMCRequeue> mpmc_requeue = make_shared<MPMCRequeue>(mpmc);
 
-int main() {}
+void spawn_listen(string address) { network_listen(move(address), mpmc, mpmc, mpmc_requeue); }
+
+int main() { spawn_listen("123"); }

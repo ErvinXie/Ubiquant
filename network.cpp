@@ -91,7 +91,7 @@ class Sender {
     }
 };
 
-static struct sockaddr parse_address(string address) {}
+static struct sockaddr parse_address(string address) { assert(!"unimplemented"); }
 
 void network_listen(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink,
                     shared_ptr<PacketSink> requeue) {

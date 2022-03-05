@@ -16,14 +16,17 @@ using std::uint8_t;
 using std::vector;
 
 class OBitStream {
-    vector<uint8_t> buf(CHUNK_SIZE);
-    uint32_t shard_id;
+    vector<uint8_t> buf;
+    uint32_t shard;
     uint32_t seq;
-    uint32_t max_num_bits = CHUNK_SIZE * 8;
+    uint32_t max_num_bits;
     uint32_t cursor;
     shared_ptr<PacketSink> sink;
 
    public:
+    OBitStream(uint32_t shard, shared_ptr<PacketSink> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
+        : shard(shard), sink(sink), max_num_bits(max_num_bits), buf((max_num_bits + 7) / 8) {}
+
     ~OBitStream() { flush(); }
 
     void put_bit(bool bit) {
@@ -39,15 +42,15 @@ class OBitStream {
             return;
         }
         buf.resize((cursor + 7) / 8);
-        sink->send(Packet{.shard_id = shard_id, .num_bits = cursor, .seq = seq++, .data = move(buf)});
+        sink->send(Packet{.shard = shard, .seq = seq++, .num_bits = cursor, .data = move(buf)});
         cursor = 0;
-        buf = vector<uint8_t>(CHUNK_SIZE);
+        buf = vector<uint8_t>((max_num_bits + 7) / 8);
     }
 };
 
 class IBitStream {
     vector<uint8_t> buf;
-    uint32_t shard_id;
+    uint32_t shard;
     uint32_t seq;
     uint32_t num_bits;
     uint32_t cursor;
@@ -58,6 +61,7 @@ class IBitStream {
         auto it = packets.find(seq);
         while (it == packets.end()) {
             auto packet = stream->next();
+            assert(packet.shard == shard);
             if (packet.seq >= seq) {
                 packets[packet.seq] = packet;
             } else {
@@ -74,6 +78,8 @@ class IBitStream {
     }
 
    public:
+    IBitStream(uint32_t shard, shared_ptr<PacketStream> stream) : shard(shard), stream(stream) {}
+
     bool get_bit() {
         while (cursor >= num_bits) {
             fetch_packet();
