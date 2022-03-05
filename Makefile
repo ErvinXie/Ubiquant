@@ -1,9 +1,10 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall
+CXXFLAGS = -std=c++17 -Wall -g
 LD = g++
-LDFLAGS = -std=c++17
+LDFLAGS = -std=c++17 -g
+HDF5 = /opt/anaconda3/bin/h5c++
 
-all: 
+all: exchange ubi-read-test
 
 network.o: network.cpp network.h
 	$(CXX) $(CXXFLAGS) $< -c -o $@
@@ -14,5 +15,8 @@ exchange.o: exchange.cpp network.h
 exchange: exchange.o network.o
 	$(LD) $(LDFLAGS) $^ -o $@
 
-clean: 
-	rm -f *.o exchange
+ubi-read-test: ubi-read-test.cpp
+	$(HDF5) -o $@ $^ -g 
+
+clean:
+	rm -f *.o exchange ubi-read-test 
