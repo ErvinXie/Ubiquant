@@ -23,6 +23,14 @@ struct given_order
     int volume;
 };
 
+struct hook
+{
+    int self_order_id;
+    int target_stk_code;
+    int target_trade_idx;
+    int arg;
+};
+
 // raw order struct when reading and sorting
 struct raw_order
 {
@@ -51,7 +59,7 @@ struct raw_order
 
     int get_type()
     {
-        return (volume__type__direction & 0b0111000000000000)>>12;
+        return (volume__type__direction & 0b0111000000000000) >> 12;
     }
 
     void set_direction(int direction)
@@ -295,6 +303,74 @@ int *read_order_id(char *path_100x1000x1000, char *trader, int max_order)
 
     dataset.read(data_read, PredType::NATIVE_INT, memspace, dataspace);
 
+    return data_read;
+  
+}
+
+int *read_hook(char *path_100x1000x1000)
+{
+    std::string swhat("hook"), spath(path_100x1000x1000);
+    fs::path dir(spath);
+    fs::path fname(swhat + ".h5");
+    fs::path full_path = dir / fname;
+    std::cout << full_path << std::endl;
+
+    const H5std_string FILE_NAME(full_path.c_str());
+    const H5std_string DATASET_NAME(swhat.c_str());
+
+    H5File file(FILE_NAME, H5F_ACC_RDONLY);
+    DataSet dataset = file.openDataSet(DATASET_NAME);
+
+    DataSpace dataspace = dataset.getSpace();
+    int rank = dataspace.getSimpleExtentNdims();
+
+    hsize_t dims_out[3];
+    dataspace.getSimpleExtentDims(dims_out, NULL);
+
+    printf("rank %d, shape (%llu, %llu, %llu)\n", rank, dims_out[0], dims_out[1], dims_out[2]);
+
+    int NX_SUB;
+    int NY_SUB;
+    int NZ_SUB;
+
+    const int RANK_OUT = 3;
+
+    NX_SUB = dims_out[0];
+    NY_SUB = dims_out[1];
+    NZ_SUB = dims_out[2];
+
+    int all_size = NX_SUB *NY_SUB *NZ_SUB;
+    int *data_read = new int[all_size];
+    memset(data_read, 0, sizeof(int)* all_size);
+
+    hsize_t offset[3];
+    hsize_t count[3];
+    offset[0] = 0;
+    offset[1] = 0;
+    offset[2] = 0;
+    count[0] = NX_SUB;
+    count[1] = NY_SUB;
+    count[2] = NZ_SUB;
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset); // select in file, this api can set api
+
+    hsize_t dimsm[3];
+    dimsm[0] = NX_SUB;
+    dimsm[1] = NY_SUB;
+    dimsm[2] = NZ_SUB;
+    DataSpace memspace(RANK_OUT, dimsm);
+
+    hsize_t offset_out[3];
+    hsize_t count_out[3];
+    offset_out[0] = 0;
+    offset_out[1] = 0;
+    offset_out[2] = 0;
+    count_out[0] = NX_SUB;
+    count_out[1] = NY_SUB;
+    count_out[2] = NZ_SUB;
+    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out); // select in memory
+
+    dataset.read(data_read, PredType::NATIVE_INT, memspace, dataspace);
+    
     return data_read;
 }
 

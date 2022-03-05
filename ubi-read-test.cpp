@@ -8,8 +8,11 @@ int main()
 
     int single_order_max = 100*sqsize*sqsize;
 
+    int* hook = read_hook(datapath.data());
+  
     read_all(datapath.data(), "1", single_order_max, raw_orders);
     read_all(datapath.data(), "2", single_order_max, raw_orders);
+
     // read_all("/data/100x10x10", "1", 100 * 10 * 10);
 
     for (size_t i = 1; i <= 10; i++)
