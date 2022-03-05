@@ -29,8 +29,8 @@ struct Order {
 
 // 成交记录
 struct Trade {
-    uint32_t bid_id;    // 买方id
-    uint32_t trade_id;  // 卖方id
+    uint32_t bid_id;  // 买方id
+    uint32_t ask_id;  // 卖方id
     uint32_t price;
     uint32_t volume;
 };
