@@ -8,7 +8,7 @@ network.o: network.cpp network.h
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
 ubi-read-test: ubi-read-test.cpp
-	$(HDF5) -o $@ $^ -g -O0
+	$(HDF5) -o $@ $^ -g 
 
 clean:
 	rm -f *.o ubi-read-test
