@@ -1,42 +1,34 @@
-#include <condition_variable>
 #include <cstdint>
-#include <deque>
-#include <map>
-#include <mutex>
+#include <memory>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
-using std::condition_variable;
-using std::deque;
-using std::map;
-using std::mutex;
+using std::move;
+using std::optional;
+using std::shared_ptr;
+using std::string;
 using std::uint32_t;
 using std::uint8_t;
-using std::unique_lock;
 using std::vector;
 
-class DataQueue {
-    mutex mtx;
-    condition_variable cv;
-    map<uint32_t, vector<uint8_t>> chunks;
-    uint32_t counter = 0;
-
-   public:
-    DataQueue() = default;
-
-    void insert(uint32_t id, vector<uint8_t> bytes) {
-        unique_lock<mutex> lk(mtx);
-        chunks[id] = bytes;
-        lk.unlock();
-        cv.notify_one();
-    }
-
-    vector<uint8_t> pop() {
-        unique_lock<mutex> lk(mtx);
-        cv.wait(lk, [&] { return chunks.count(counter) > 0; });
-        auto ret = std::move(chunks[counter]);
-        chunks.erase(counter);
-        counter++;
-        return ret;
-    }
+struct Packet {
+    uint32_t stock_id;
+    uint32_t seq_id;
+    vector<uint8_t> data;
 };
+
+class PacketStream {
+   public:
+    virtual optional<Packet> next() = 0;
+};
+
+class PacketSink {
+   public:
+    virtual void send(Packet packet) = 0;
+};
+
+void network_listen(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink);
+
+void network_connect(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink);

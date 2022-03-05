@@ -10,9 +10,9 @@ enum Direction {
 };
 
 enum Type {
-    Limit = 0,        // 限价订单
-    CounterBest = 1,  // 本方最优
-    ClientBest = 2,   // 对手方最优
+    Limit = 0,        // 限价申报
+    CounterBest = 1,  // 对手方最优
+    ClientBest = 2,   // 本方最优
     BestFive = 3,     // 最优五档剩余撤销
     FAK = 4,          // 即时成交剩余撤销
     FOK = 5,          // 全额成交或撤销
