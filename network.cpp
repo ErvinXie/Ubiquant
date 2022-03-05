@@ -4,11 +4,9 @@
 #include <unistd.h>
 
 #include <cassert>
-#include <memory>
 #include <thread>
 
 using std::make_shared;
-using std::shared_ptr;
 using std::thread;
 
 const size_t CHUNK_SIZE = 10 * 4096;
@@ -17,81 +15,86 @@ class Fd {
     int fd;
 
    public:
-    Fd(int fd) : fd(fd) {}
+    explicit Fd(int fd) : fd(fd) {}
     ~Fd() { ::close(fd); }
 
     operator int() { return fd; }
 };
 
-class Server {
+class Receiver {
     shared_ptr<Fd> sockfd;
-    shared_ptr<DataQueue> queue;
+    shared_ptr<PacketSink> sink;
 
    public:
-    Server(shared_ptr<Fd> sockfd, shared_ptr<DataQueue> queue) : sockfd(sockfd), queue(queue) {}
+    Receiver(shared_ptr<Fd> sockfd, shared_ptr<PacketSink> sink) : sockfd(sockfd), sink(sink) {}
 
     void run() {
         while (true) {
             auto buffer = vector<uint8_t>(CHUNK_SIZE);
-            ssize_t bytes_read = ::read(*sockfd, buffer.data(), buffer.size());
+            ssize_t bytes_read = ::recv(*sockfd, buffer.data(), buffer.size(), 0);
             if (bytes_read < 0) {
                 assert(!"failed to read");
             }
             buffer.resize(bytes_read);
-            queue->insert(0, buffer);
+            // sink->send(move(buffer));
+            assert(!"todo: serdes");
         }
     }
 };
 
-class Client {
+class Sender {
     shared_ptr<Fd> sockfd;
-    shared_ptr<DataQueue> queue;
+    shared_ptr<PacketStream> stream;
 
    public:
-    Client(shared_ptr<Fd> sockfd, shared_ptr<DataQueue> queue) : sockfd(sockfd), queue(queue) {}
+    Sender(shared_ptr<Fd> sockfd, shared_ptr<PacketStream> stream) : sockfd(sockfd), stream(stream) {}
 
     void run() {
-        while (true) {
-            auto data = queue->pop();
-            size_t nbyte = data.size();
-            size_t bytes_written = 0;
-            while (bytes_written < nbyte) {
-                ssize_t ret = ::write(*sockfd, (const void*)(data.data() + bytes_written), nbyte - bytes_written);
-                if (ret < 0) {
-                    assert(!"failed to write");
-                }
-                bytes_written += ret;
-            }
+        optional<Packet> packet;
+        while (packet = stream->next()) {
+            assert(!"todo: serdes");
+            // auto data = move(packet.value());
+            // size_t nbyte = data.size();
+            // size_t bytes_written = 0;
+            // while (bytes_written < nbyte) {
+            //     ssize_t ret = ::write(*sockfd, (const void*)(data.data() + bytes_written), nbyte - bytes_written);
+            //     if (ret < 0) {
+            //         assert(!"failed to write");
+            //     }
+            //     bytes_written += ret;
+            // }
         }
     }
 };
 
 class Listener {
-    int sockfd = 0;
-    shared_ptr<DataQueue> queue;
+    int sockfd;
+    struct sockaddr address;
+    shared_ptr<PacketStream> stream;
+    shared_ptr<PacketSink> sink;
 
    public:
-    Listener() {
+    Listener(struct sockaddr address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink)
+        : address(address), stream(stream), sink(sink) {
         sockfd = ::socket(PF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
             assert(!"failed to create socket");
+        }
+        if (::bind(sockfd, &address, sizeof(struct sockaddr)) < 0) {
+            assert(!"failed to bind to specific port");
         }
     }
 
     ~Listener() { ::close(sockfd); }
 
-    void listen(struct sockaddr address) {
-        if (::bind(sockfd, &address, sizeof(struct sockaddr)) < 0) {
-            assert(!"failed to bind to specific port");
-        }
+    void listen() {
         if (::listen(sockfd, 16) < 0) {
             assert(!"failed to listen");
         }
         struct sockaddr client_address;
         socklen_t address_len;
-        int streamfd = -1;
         while (true) {
-            streamfd = ::accept(sockfd, &client_address, &address_len);
+            int streamfd = ::accept(sockfd, &client_address, &address_len);
             if (streamfd < 0) {
                 assert(!"failed to accept");
             }
@@ -99,15 +102,19 @@ class Listener {
 
             // spawn server thread
             thread([=] {
-                Server server(fd, queue);
-                server.run();
+                Receiver rx(fd, sink);
+                rx.run();
             });
 
             // spawn client thread
             thread([=] {
-                Client client(fd, queue);
-                client.run();
+                Sender tx(fd, stream);
+                tx.run();
             });
         }
     }
 };
+
+void network_listen(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink);
+
+void network_connect(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink);
