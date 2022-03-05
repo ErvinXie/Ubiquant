@@ -75,6 +75,10 @@ class OrderEncoder {
         encode_type_and_price(order.type, order.price);
         encode_uint32(order.volume);
     }
+
+    void flush() { os.flush(); }
+
+    OBitStream& get_stream() { return os; }
 };
 
 class OrderDecoder {
@@ -134,4 +138,6 @@ class OrderDecoder {
             .volume = volume,
         };
     }
+
+    IBitStream& get_stream() { return is; }
 };
