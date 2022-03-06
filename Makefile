@@ -15,7 +15,7 @@ $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-all: exchange trader ubi-read-test
+all: exchange trader
 
 EXCHANGE_DEP := $(OBJS) $(BUILD_DIR)/exchange.o
 TRADER_DEP := $(OBJS) $(BUILD_DIR)/trader.o
@@ -29,7 +29,7 @@ trader: $(TRADER_DEP)
 	@$(LD) $(LDFLAGS) $^ -o $@
 
 ubi-read-test: ubi-read-test.cpp
-	$(HDF5) -o $@ $^ -g 
+	$(HDF5) -o $@ $^ 
 
 clean:
-	rm -rf $(BUILD_DIR) exchange trader ubi-read-test 
+	rm -rf $(BUILD_DIR) exchange trader ubi-read-test
