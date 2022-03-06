@@ -6,7 +6,7 @@
 
 using std::pair;
 
-class OrderEncoder {
+class OrderEncoder final : public Sink<Order> {
     uint32_t last_price;
     OBitStream os;
 
@@ -70,7 +70,7 @@ class OrderEncoder {
     void encode_uint32(uint32_t value) { assert(!"unimplemented!"); }
 
    public:
-    void encode(Order order) {
+    virtual void send(Order order) override {
         encode_direction(order.dir);
         encode_type_and_price(order.type, order.price);
         encode_uint32(order.volume);
@@ -81,7 +81,7 @@ class OrderEncoder {
     OBitStream& get_stream() { return os; }
 };
 
-class OrderDecoder {
+class OrderDecoder final : public Stream<Order> {
     uint32_t last_price;
     IBitStream is;
 
@@ -126,7 +126,7 @@ class OrderDecoder {
     uint32_t decode_uint32() { assert(!"unimplemented!"); }
 
    public:
-    Order decode() {
+    virtual std::optional<Order> next() override {
         Direction dir = decode_direction();
         auto [type, price] = decode_type_and_price();
         uint32_t volume = decode_uint32();

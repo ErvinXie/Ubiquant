@@ -1,16 +1,15 @@
 #include "network.h"
 
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
 #include <cassert>
-#include <thread>
+#include <cstdint>
 #include <type_traits>
 
-using std::extent_v;
-using std::make_shared;
-using std::thread;
+#include "common.h"
 
 const int BACKLOG_SIZE = 16;
 
@@ -25,11 +24,11 @@ class Fd {
 };
 
 class Receiver {
-    shared_ptr<Fd> sockfd;
-    shared_ptr<PacketSink> sink;
+    std::shared_ptr<Fd> sockfd;
+    std::shared_ptr<Sink<Packet>> sink;
 
    public:
-    Receiver(shared_ptr<Fd> sockfd, shared_ptr<PacketSink> sink) : sockfd(sockfd), sink(sink) {}
+    Receiver(std::shared_ptr<Fd> sockfd, std::shared_ptr<Sink<Packet>> sink) : sockfd(sockfd), sink(sink) {}
 
     void run() {
         while (true) {
@@ -42,37 +41,39 @@ class Receiver {
                 iovec{.iov_base = &seq, .iov_len = sizeof seq},
                 iovec{.iov_base = &num_bits, .iov_len = sizeof num_bits},
             };
-
-            ssize_t ret = ::readv(*sockfd, iov, extent_v<decltype(iov)>);
-            if (ret < 0) {
-                assert(!"failed to read");
+            {
+                ssize_t ret = ::readv(*sockfd, iov, std::extent_v<decltype(iov)>);
+                if (ret < (ssize_t)(sizeof shard + sizeof seq + sizeof num_bits)) {
+                    assert(!"failed to read the packet metadata");
+                }
             }
 
             size_t bytes = (num_bits + 7) / 8;
-            vector<uint8_t> buffer(bytes);
-            ssize_t bytes_read = ::read(*sockfd, buffer.data(), buffer.size());
-            if (ret < 0) {
-                assert(!"failed to read");
+            std::vector<uint8_t> buffer(bytes);
+            {
+                ssize_t ret = ::read(*sockfd, buffer.data(), bytes);
+                if (ret < (ssize_t)bytes) {
+                    assert(!"failed to read the packet");
+                }
             }
+
             Packet packet{.shard = shard, .seq = seq, .num_bits = num_bits, .data = buffer};
             packet.check_well_formedness();
-            sink->send(move(packet));
+            sink->send(std::move(packet));
         }
     }
 };
 
 class Sender {
-    shared_ptr<Fd> sockfd;
-    shared_ptr<PacketStream> stream;
-    shared_ptr<PacketSink> requeue;
+    std::shared_ptr<Fd> sockfd;
+    std::shared_ptr<PacketQueue> stream;
 
    public:
-    Sender(shared_ptr<Fd> sockfd, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> requeue)
-        : sockfd(sockfd), stream(stream), requeue(requeue) {}
+    Sender(std::shared_ptr<Fd> sockfd, std::shared_ptr<PacketQueue> stream) : sockfd(sockfd), stream(stream) {}
 
     void run() {
-        while (true) {
-            Packet packet = stream->next();
+        while (std::optional<Packet> optional_packet = stream->next()) {
+            Packet packet = std::move(optional_packet.value());
             packet.check_well_formedness();
 
             const struct iovec iov[] = {
@@ -82,28 +83,39 @@ class Sender {
                 iovec{.iov_base = packet.data.data(), .iov_len = packet.data.size()},
             };
 
-            ssize_t ret = ::writev(*sockfd, iov, extent_v<decltype(iov)>);
+            ssize_t ret = ::writev(*sockfd, iov, std::extent_v<decltype(iov)>);
             if (ret < 0) {
-                requeue->send(move(packet));
+                stream->requeue(std::move(packet));
                 assert(!"todo: handle transmission error");
             }
         }
     }
 };
 
-static struct sockaddr parse_address(string address) { assert(!"unimplemented"); }
+std::optional<struct in_addr> parse_address(std::string address) {
+    struct in_addr addr;
+    if (::inet_pton(AF_INET, address.c_str(), &addr) > 0) {
+        return addr;
+    } else {
+        return {};
+    }
+}
 
-void network_listen(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink,
-                    shared_ptr<PacketSink> requeue) {
-    thread([=] {
-        int sockfd = ::socket(PF_INET, SOCK_STREAM, 0);
-        if (sockfd < 0) {
+void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
+                    std::shared_ptr<Sink<Packet>> sink) {
+    struct sockaddr_in sa {
+        .sin_family = AF_INET, .sin_port = port, .sin_addr = addr
+    };
+    spawn_thread([=] {
+        int fd = ::socket(PF_INET, SOCK_STREAM, 0);
+
+        if (fd < 0) {
             assert(!"failed to create socket");
         }
 
-        struct sockaddr addr = parse_address(address);
+        Fd sockfd(fd);
 
-        if (::bind(sockfd, &addr, sizeof addr) < 0) {
+        if (::bind(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
             assert(!"failed to bind to specific port");
         }
 
@@ -119,48 +131,49 @@ void network_listen(string address, shared_ptr<PacketStream> stream, shared_ptr<
                 assert(!"failed to accept");
             }
 
-            shared_ptr<Fd> fd = make_shared<Fd>(streamfd);
+            std::shared_ptr<Fd> fd = std::make_shared<Fd>(streamfd);
 
             // spawn receiver thread
-            thread([=] {
+            spawn_thread([=] {
                 Receiver rx(fd, sink);
                 rx.run();
             });
 
             // spawn sender thread
-            thread([=] {
-                Sender tx(fd, stream, requeue);
+            spawn_thread([=] {
+                Sender tx(fd, stream);
                 tx.run();
             });
         }
     });
 }
 
-void network_connect(string address, shared_ptr<PacketStream> stream, shared_ptr<PacketSink> sink,
-                     shared_ptr<PacketSink> requeue) {
-    thread([=] {
+void network_connect(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
+                     std::shared_ptr<Sink<Packet>> sink) {
+    struct sockaddr_in sa {
+        .sin_family = AF_INET, .sin_port = port, .sin_addr = addr
+    };
+    spawn_thread([=] {
         int sockfd = ::socket(PF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
             assert(!"failed to create socket");
         }
 
-        struct sockaddr addr = parse_address(address);
+        std::shared_ptr<Fd> fd = std::make_shared<Fd>(sockfd);
 
-        while (::connect(sockfd, &addr, sizeof addr) < 0) {
+        while (::connect(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
             assert(!"retry connection");
         }
 
-        shared_ptr<Fd> fd = make_shared<Fd>(sockfd);
-
         // spawn receiver thread
-        thread([=] {
+        spawn_thread([=] {
             Receiver rx(fd, sink);
             rx.run();
         });
 
         // spawn sender thread
-        thread([=] {
-            Sender tx(fd, stream, requeue);
+        spawn_thread([=] {
+            Sender tx(fd, stream);
             tx.run();
         });
     });

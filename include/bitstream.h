@@ -1,3 +1,6 @@
+#ifndef BITSTREAM_H
+#define BITSTREAM_H
+
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -16,15 +19,15 @@ using std::uint8_t;
 using std::vector;
 
 class OBitStream {
-    vector<uint8_t> buf;
+    std::vector<uint8_t> buf;
     uint32_t shard;
     uint32_t seq;
     uint32_t max_num_bits;
     uint32_t cursor;
-    shared_ptr<PacketSink> sink;
+    std::shared_ptr<Sink<Packet>> sink;
 
    public:
-    OBitStream(uint32_t shard, shared_ptr<PacketSink> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
+    OBitStream(uint32_t shard, std::shared_ptr<PacketSink> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
         : shard(shard), sink(sink), max_num_bits(max_num_bits), buf((max_num_bits + 7) / 8) {}
 
     ~OBitStream() { flush(); }
@@ -49,13 +52,13 @@ class OBitStream {
 };
 
 class IBitStream {
-    vector<uint8_t> buf;
+    std::vector<uint8_t> buf;
     uint32_t shard;
     uint32_t seq;
     uint32_t num_bits;
     uint32_t cursor;
-    map<uint32_t, Packet> packets;
-    shared_ptr<PacketStream> stream;
+    std::map<uint32_t, Packet> packets;
+    std::shared_ptr<Stream<Packet>> stream;
 
     void fetch_packet() {
         auto it = packets.find(seq);
@@ -78,7 +81,7 @@ class IBitStream {
     }
 
    public:
-    IBitStream(uint32_t shard, shared_ptr<PacketStream> stream) : shard(shard), stream(stream) {}
+    IBitStream(uint32_t shard, std::shared_ptr<PacketStream> stream) : shard(shard), stream(stream) {}
 
     bool get_bit() {
         while (cursor >= num_bits) {
@@ -89,3 +92,5 @@ class IBitStream {
         return result;
     }
 };
+
+#endif
