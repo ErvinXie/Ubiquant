@@ -67,18 +67,14 @@ class OrderEncoder final : public Sink<Order> {
 
     void encode_int32(int32_t value) { assert(!"unimplemented!"); }
 
-    void encode_uint32(uint32_t value) { assert(!"unimplemented!"); }
-
    public:
     virtual void send(Order order) override {
         encode_direction(order.dir);
         encode_type_and_price(order.type, order.price);
-        encode_uint32(order.volume);
+        os.put_bits(10, order.volume);
     }
 
     void flush() { os.flush(); }
-
-    OBitStream& get_stream() { return os; }
 };
 
 class OrderDecoder final : public Stream<Order> {
@@ -123,13 +119,11 @@ class OrderDecoder final : public Stream<Order> {
 
     int32_t decode_int32() { assert(!"unimplemeted"); }
 
-    uint32_t decode_uint32() { assert(!"unimplemented!"); }
-
    public:
     virtual std::optional<Order> next() override {
         Direction dir = decode_direction();
         auto [type, price] = decode_type_and_price();
-        uint32_t volume = decode_uint32();
+        uint32_t volume = is.get_bits(10);
         return Order{
             .order_id = 0,
             .dir = dir,
@@ -138,6 +132,4 @@ class OrderDecoder final : public Stream<Order> {
             .volume = volume,
         };
     }
-
-    IBitStream& get_stream() { return is; }
 };

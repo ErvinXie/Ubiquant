@@ -32,4 +32,4 @@ ubi-read-test: ubi-read-test.cpp
 	$(HDF5) -o $@ $^ 
 
 clean:
-	rm -rf $(BUILD_DIR) exchange trader ubi-read-test
+	rm -rf $(BUILD_DIR) exchange trader

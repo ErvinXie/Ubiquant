@@ -11,12 +11,9 @@
 
 #include "network.h"
 
-using std::map;
-using std::min;
 using std::shared_ptr;
 using std::uint32_t;
 using std::uint8_t;
-using std::vector;
 
 class OBitStream {
     std::vector<uint8_t> buf;
@@ -27,8 +24,8 @@ class OBitStream {
     std::shared_ptr<Sink<Packet>> sink;
 
    public:
-    OBitStream(uint32_t shard, std::shared_ptr<PacketSink> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
-        : shard(shard), sink(sink), max_num_bits(max_num_bits), buf((max_num_bits + 7) / 8) {}
+    OBitStream(uint32_t shard, std::shared_ptr<Sink<Packet>> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
+        : buf((max_num_bits + 7) / 8), shard(shard), seq(0), max_num_bits(max_num_bits), cursor(0), sink(sink) {}
 
     ~OBitStream() { flush(); }
 
@@ -40,6 +37,12 @@ class OBitStream {
         }
     }
 
+    void put_bits(int num, uint32_t bits) {
+        for (int i = 0; i < num; i++) {
+            put_bit(bits & (1 << num));
+        }
+    }
+
     void flush() {
         if (buf.empty() && cursor == 0) {
             return;
@@ -47,7 +50,7 @@ class OBitStream {
         buf.resize((cursor + 7) / 8);
         sink->send(Packet{.shard = shard, .seq = seq++, .num_bits = cursor, .data = move(buf)});
         cursor = 0;
-        buf = vector<uint8_t>((max_num_bits + 7) / 8);
+        buf = std::vector<uint8_t>((max_num_bits + 7) / 8);
     }
 };
 
@@ -63,16 +66,20 @@ class IBitStream {
     void fetch_packet() {
         auto it = packets.find(seq);
         while (it == packets.end()) {
-            auto packet = stream->next();
-            assert(packet.shard == shard);
-            if (packet.seq >= seq) {
-                packets[packet.seq] = packet;
+            if (auto optional_packet = stream->next()) {
+                auto packet = optional_packet.value();
+                assert(packet.shard == shard);
+                if (packet.seq >= seq) {
+                    packets[packet.seq] = std::move(packet);
+                } else {
+                    // discard duplicated packets
+                }
+                it = packets.find(seq);
             } else {
-                // discard duplicated packets
+                // eof
             }
-            it = packets.find(seq);
         }
-        Packet packet = move(it->second);
+        Packet packet = std::move(it->second);
         packets.erase(it);
         seq++;
         buf = move(packet.data);
@@ -81,7 +88,17 @@ class IBitStream {
     }
 
    public:
-    IBitStream(uint32_t shard, std::shared_ptr<PacketStream> stream) : shard(shard), stream(stream) {}
+    IBitStream(uint32_t shard, std::shared_ptr<Stream<Packet>> stream) : shard(shard), stream(stream) {}
+
+    uint32_t get_bits(int num) {
+        uint32_t ret = 0;
+        for (int i = 0; i < num; i++) {
+            if (get_bit()) {
+                ret |= 1 << i;
+            }
+        }
+        return ret;
+    }
 
     bool get_bit() {
         while (cursor >= num_bits) {

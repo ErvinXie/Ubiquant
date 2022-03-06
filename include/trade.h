@@ -7,7 +7,6 @@
 #include "common.h"
 
 using std::uint32_t;
-using std::vector;
 
 enum Direction {
     Bid = 1,   // 买入
@@ -48,11 +47,11 @@ class OrderMerger : Stream<Order> {
 
    public:
     OrderMerger(std::shared_ptr<Stream<Order>> left, std::shared_ptr<Stream<Order>> right, uint32_t init)
-        : left(left), right(right), init(init) {}
+        : left(left), right(right), current(init) {}
 
     virtual std::optional<Order> next() override {
         if (!left_buf) {
-            left_buf = left.next();
+            left_buf = left->next();
         }
         if (left_buf && left_buf->order_id == current) {
             auto order = std::move(left_buf.value());
@@ -61,7 +60,7 @@ class OrderMerger : Stream<Order> {
             return order;
         }
         if (!right_buf) {
-            right_buf = right.next();
+            right_buf = right->next();
         }
         if (right_buf && right_buf->order_id == current) {
             auto order = std::move(right_buf.value());
@@ -71,15 +70,6 @@ class OrderMerger : Stream<Order> {
         }
         return {};
     }
-
-}
-
-// 单支股票的撮合器
-struct Exchanger {
-    // add exchanger definition
-
-    // Insert an order to the exchanger, return the result trades.
-    vector<Trade> insert(Order order);
 };
 
 #endif
