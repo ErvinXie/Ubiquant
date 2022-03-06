@@ -15,12 +15,14 @@ HDF5 := /opt/anaconda3/bin/h5c++
 SRCS := $(shell find ./src -name "*.cpp")
 OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
 
+all: exchange trader
+
+-include $(OBJS:.o=.d)
+
 $(BUILD_DIR)/%.o: %.cpp
 	@echo + CXX $<
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
-
-all: exchange trader
 
 EXCHANGE_DEP := $(OBJS) $(BUILD_DIR)/exchange.o
 TRADER_DEP := $(OBJS) $(BUILD_DIR)/trader.o

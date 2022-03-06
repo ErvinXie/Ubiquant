@@ -29,13 +29,13 @@ Persister::Persister(const char *path, int stk_id, int max_trade_count)
     ::madvise((void *)tp, max_size, MADV_SEQUENTIAL);
 }
 
-void Persister::send(Trade trade) {
+void Persister::persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume) {
     tp[now_cnt++] = PersistTrade{
         .stk_code = stk_id,
-        .bid_id = (int)trade.bid_id,
-        .ask_id = (int)trade.ask_id,
-        .price = (double)trade.price / 100.0,
-        .volume = (int)trade.volume,
+        .bid_id = (int)bid_id,
+        .ask_id = (int)ask_id,
+        .price = (double)price / 100.0,
+        .volume = (int)volume,
     };
 }
 

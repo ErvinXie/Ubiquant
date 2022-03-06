@@ -3,10 +3,9 @@
 
 #include <string>
 
-#include "common.h"
 #include "trade.h"
 
-class Persister : public Sink<Trade> {
+class Persister {
     struct PersistTrade {
         int stk_code;
         int bid_id;
@@ -25,7 +24,7 @@ class Persister : public Sink<Trade> {
    public:
     Persister(const char* path, int stk_id, int max_trade_count);
 
-    virtual void send(Trade trade) override;
+    void persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume);
 
     ~Persister();
 };

@@ -1,11 +1,12 @@
-#ifndef EXCHANGER_H
-#define EXCHANGER_H
+#ifndef PROCESSOR_H
+#define PROCESSOR_H
 
+#include "hook.h"
 #include "persister.h"
 #include "trade.h"
 
 // 合并器
-class OrderMerger : Stream<Order> {
+class OrderMerger final : Stream<Order> {
     std::shared_ptr<Stream<Order>> local, remote;
     std::optional<Order> buf;
     uint32_t current;
@@ -33,12 +34,24 @@ class OrderMerger : Stream<Order> {
 };
 
 // 单支股票的撮合器
-struct Exchanger : Sink<Order> {
+class Processor {
+    HookChecker checker;
+    HookNotifier notifier;
     Persister persister;
     // add exchanger definition
 
+    void process_limit(Order::Direction dir, uint32_t order_id, uint32_t price, uint32_t volume);
+    void process_counter_best(Order::Direction dir, uint32_t order_id, uint32_t volume);
+    void process_client_best(Order::Direction dir, uint32_t order_id, uint32_t volume);
+    void process_best_five(Order::Direction dir, uint32_t order_id, uint32_t volume);
+    void process_fak(Order::Direction dir, uint32_t order_id, uint32_t volume);
+    void process_fok(Order::Direction dir, uint32_t order_id, uint32_t volume);
+
+    void commit(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume);
+
+   public:
     // Insert an order to the exchanger, return the result trades.
-    virtual void send(Order order) override;
+    void process(Order order);
 };
 
 #endif

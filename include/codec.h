@@ -10,12 +10,12 @@ class OrderEncoder final : public Sink<Order> {
     uint32_t last_price;
     OBitStream os;
 
-    void encode_direction(Direction dir) {
+    void encode_direction(Order::Direction dir) {
         switch (dir) {
-            case Bid:
+            case Order::Bid:
                 os.put_bit(0);
                 break;
-            case Ask:
+            case Order::Ask:
                 os.put_bit(1);
                 break;
             default:
@@ -23,38 +23,38 @@ class OrderEncoder final : public Sink<Order> {
         }
     }
 
-    void encode_type_and_price(Type type, uint32_t price) {
+    void encode_type_and_price(Order::OrderType type, uint32_t price) {
         switch (type) {
-            case Limit:
+            case Order::Limit:
                 os.put_bit(0);
                 encode_int32((int32_t)price - (int32_t)last_price);
                 last_price = price;
                 break;
-            case CounterBest:
+            case Order::CounterBest:
                 os.put_bit(1);
                 os.put_bit(0);
                 os.put_bit(0);
                 os.put_bit(0);
                 break;
-            case ClientBest:
+            case Order::ClientBest:
                 os.put_bit(1);
                 os.put_bit(0);
                 os.put_bit(0);
                 os.put_bit(1);
                 break;
-            case BestFive:
+            case Order::BestFive:
                 os.put_bit(1);
                 os.put_bit(0);
                 os.put_bit(1);
                 os.put_bit(0);
                 break;
-            case FAK:
+            case Order::FAK:
                 os.put_bit(1);
                 os.put_bit(0);
                 os.put_bit(1);
                 os.put_bit(1);
                 break;
-            case FOK:
+            case Order::FOK:
                 os.put_bit(1);
                 os.put_bit(1);
                 os.put_bit(0);
@@ -81,38 +81,38 @@ class OrderDecoder final : public Stream<Order> {
     uint32_t last_price;
     IBitStream is;
 
-    Direction decode_direction() {
+    Order::Direction decode_direction() {
         if (is.get_bit() == 0) {
-            return Bid;
+            return Order::Bid;
         } else {
-            return Ask;
+            return Order::Ask;
         }
     }
 
-    pair<Type, uint32_t> decode_type_and_price() {
+    pair<Order::OrderType, uint32_t> decode_type_and_price() {
         if (is.get_bit() == 0) {
             // Limit
             last_price += decode_int32();
-            return {Limit, last_price};
+            return {Order::Limit, last_price};
         } else {
             if (is.get_bit() == 0) {
                 if (is.get_bit() == 0) {
                     if (is.get_bit() == 0) {
-                        return {CounterBest, 0};
+                        return {Order::CounterBest, 0};
                     } else {
-                        return {ClientBest, 0};
+                        return {Order::ClientBest, 0};
                     }
                 } else {
                     if (is.get_bit() == 0) {
-                        return {BestFive, 0};
+                        return {Order::BestFive, 0};
                     } else {
-                        return {FAK, 0};
+                        return {Order::FAK, 0};
                     }
                 }
             } else {
                 is.get_bit();
                 is.get_bit();
-                return {FOK, 0};
+                return {Order::FOK, 0};
             }
         }
     }
@@ -121,7 +121,7 @@ class OrderDecoder final : public Stream<Order> {
 
    public:
     virtual std::optional<Order> next() override {
-        Direction dir = decode_direction();
+        auto dir = decode_direction();
         auto [type, price] = decode_type_and_price();
         uint32_t volume = is.get_bits(10);
         return Order{

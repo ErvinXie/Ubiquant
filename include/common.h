@@ -13,12 +13,18 @@ void spawn_thread(Function&& f, Args&&... args) {
 
 template <typename T>
 struct Sink {
+   protected:
+    ~Sink() = default;
+
    public:
     virtual void send(T x) = 0;
 };
 
 template <typename T>
 struct Stream {
+   protected:
+    ~Stream() = default;
+
    public:
     virtual std::optional<T> next() = 0;
 };

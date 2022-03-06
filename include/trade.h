@@ -8,25 +8,25 @@
 
 using std::uint32_t;
 
-enum Direction {
-    Bid = 1,   // 买入
-    Ask = -1,  // 卖出
-};
-
-enum Type {
-    Limit = 0,        // 限价申报
-    CounterBest = 1,  // 对手方最优
-    ClientBest = 2,   // 本方最优
-    BestFive = 3,     // 最优五档剩余撤销
-    FAK = 4,          // 即时成交剩余撤销
-    FOK = 5,          // 全额成交或撤销
-};
-
 // 订单
 struct Order {
+    enum Direction {
+        Bid = 0,  // 买入
+        Ask = 1,  // 卖出
+    };
+
+    enum OrderType {
+        Limit = 0,        // 限价申报
+        CounterBest = 1,  // 对手方最优
+        ClientBest = 2,   // 本方最优
+        BestFive = 3,     // 最优五档剩余撤销
+        FAK = 4,          // 即时成交剩余撤销
+        FOK = 5,          // 全额成交或撤销
+    };
+
     uint32_t order_id;
     Direction dir;
-    Type type;
+    OrderType type;
     uint32_t price;  // 仅限价单有意义
     uint32_t volume;
 };
@@ -38,6 +38,5 @@ struct Trade {
     uint32_t price;
     uint32_t volume;
 };
-
 
 #endif
