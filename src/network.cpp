@@ -1,11 +1,14 @@
 #include "network.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <type_traits>
 
@@ -44,7 +47,8 @@ class Receiver {
             {
                 ssize_t ret = ::readv(*sockfd, iov, std::extent_v<decltype(iov)>);
                 if (ret < (ssize_t)(sizeof shard + sizeof seq + sizeof num_bits)) {
-                    assert(!"failed to read the packet metadata");
+                    WARN("readv: %s", strerror(errno));
+                    return;
                 }
             }
 
@@ -53,7 +57,8 @@ class Receiver {
             {
                 ssize_t ret = ::read(*sockfd, buffer.data(), bytes);
                 if (ret < (ssize_t)bytes) {
-                    assert(!"failed to read the packet");
+                    WARN("read: %s", strerror(errno));
+                    return;
                 }
             }
 
@@ -86,7 +91,8 @@ class Sender {
             ssize_t ret = ::writev(*sockfd, iov, std::extent_v<decltype(iov)>);
             if (ret < 0) {
                 stream->requeue(std::move(packet));
-                assert(!"todo: handle transmission error");
+                WARN("writev: %s", strerror(errno));
+                return;
             }
         }
     }
@@ -110,17 +116,20 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
         int fd = ::socket(PF_INET, SOCK_STREAM, 0);
 
         if (fd < 0) {
-            assert(!"failed to create socket");
+            ERROR("socket: %s", strerror(errno));
+            throw "failed to create socket";
         }
 
         Fd sockfd(fd);
 
         if (::bind(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
-            assert(!"failed to bind to specific port");
+            ERROR("bind: %s", strerror(errno));
+            throw "failed to bind address to socket";
         }
 
         if (::listen(sockfd, BACKLOG_SIZE) < 0) {
-            assert(!"failed to listen");
+            ERROR("listen: %s", strerror(errno));
+            throw "failed to listen";
         }
 
         struct sockaddr client_address;
@@ -128,7 +137,8 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
         while (true) {
             int streamfd = ::accept(sockfd, &client_address, &address_len);
             if (streamfd < 0) {
-                assert(!"failed to accept");
+                ERROR("accept: %s", strerror(errno));
+                throw "failed to accept connection";
             }
 
             std::shared_ptr<Fd> fd = std::make_shared<Fd>(streamfd);
@@ -156,13 +166,17 @@ void network_connect(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQ
     spawn_thread([=] {
         int sockfd = ::socket(PF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            assert(!"failed to create socket");
+            ERROR("socket: %s", strerror(errno));
+            throw "failed to create socket";
         }
 
         std::shared_ptr<Fd> fd = std::make_shared<Fd>(sockfd);
 
         while (::connect(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
-            assert(!"retry connection");
+            using namespace std::chrono_literals;
+            WARN("connect: %s", strerror(errno));
+            INFO("attempt to retry connection");
+            std::this_thread::sleep_for(1000ms);
         }
 
         // spawn receiver thread

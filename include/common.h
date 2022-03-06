@@ -1,6 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <cstdio>
 #include <optional>
 #include <thread>
 #include <utility>
@@ -14,7 +15,6 @@ template <typename T>
 struct Sink {
    public:
     virtual void send(T x) = 0;
-    virtual void close() {}
 };
 
 template <typename T>
@@ -22,5 +22,10 @@ struct Stream {
    public:
     virtual std::optional<T> next() = 0;
 };
+
+#define ERROR(...) std::fprintf(stderr, "[ERROR] " __VA_ARGS__)
+#define WARN(...) std::fprintf(stderr, "[WARN]  " __VA_ARGS__)
+#define INFO(...) std::fprintf(stderr, "[INFO]  " __VA_ARGS__)
+#define DEBUG(...) std::fprintf(stderr, "[DEBUG] " __VA_ARGS__)
 
 #endif

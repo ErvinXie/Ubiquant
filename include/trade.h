@@ -39,37 +39,5 @@ struct Trade {
     uint32_t volume;
 };
 
-// 合并器
-class OrderMerger : Stream<Order> {
-    std::shared_ptr<Stream<Order>> left, right;
-    std::optional<Order> left_buf, right_buf;
-    uint32_t current;
-
-   public:
-    OrderMerger(std::shared_ptr<Stream<Order>> left, std::shared_ptr<Stream<Order>> right, uint32_t init)
-        : left(left), right(right), current(init) {}
-
-    virtual std::optional<Order> next() override {
-        if (!left_buf) {
-            left_buf = left->next();
-        }
-        if (left_buf && left_buf->order_id == current) {
-            auto order = std::move(left_buf.value());
-            left_buf.reset();
-            current++;
-            return order;
-        }
-        if (!right_buf) {
-            right_buf = right->next();
-        }
-        if (right_buf && right_buf->order_id == current) {
-            auto order = std::move(right_buf.value());
-            right_buf.reset();
-            current++;
-            return order;
-        }
-        return {};
-    }
-};
 
 #endif

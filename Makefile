@@ -1,19 +1,24 @@
 INC_DIR += ./include
 BUILD_DIR ?= ./build
 
-CXX = g++
-CXXFLAGS = -std=c++17 -MMD -Wall -Werror -ggdb -fsanitize=address,undefined -I $(INC_DIR)
-LD = g++
-LDFLAGS = $(CXXFLAGS)
-HDF5 = /opt/anaconda3/bin/h5c++
+CXX := g++
+CXXFLAGS := -std=c++17 -MMD -Wall -Werror -I $(INC_DIR)
+ifeq ($(RELEASE), 1)
+CXXFLAGS += -g -O2
+else
+CXXFLAGS += -ggdb -fsanitize=address,undefined
+endif
+LD := g++
+LDFLAGS := $(CXXFLAGS)
+HDF5 := /opt/anaconda3/bin/h5c++
 
-SRCS = $(shell find ./src -name "*.cpp")
-OBJS = $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
+SRCS := $(shell find ./src -name "*.cpp")
+OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
 
 $(BUILD_DIR)/%.o: %.cpp
 	@echo + CXX $<
 	@mkdir -p $(dir $@)
-	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 all: exchange trader
 

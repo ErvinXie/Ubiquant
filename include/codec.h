@@ -65,7 +65,7 @@ class OrderEncoder final : public Sink<Order> {
         }
     }
 
-    void encode_int32(int32_t value) { assert(!"unimplemented!"); }
+    void encode_int32(int32_t value) { os.put_bits(32, value); }
 
    public:
     virtual void send(Order order) override {
@@ -117,7 +117,7 @@ class OrderDecoder final : public Stream<Order> {
         }
     }
 
-    int32_t decode_int32() { assert(!"unimplemeted"); }
+    int32_t decode_int32() { return is.get_bits(32); }
 
    public:
     virtual std::optional<Order> next() override {
