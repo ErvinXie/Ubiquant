@@ -33,7 +33,7 @@ struct Packet {
     }
 };
 
-class PacketQueue final : public Sink<Packet>, public Stream<Packet> {
+class PacketQueue final : public Sink<Packet> {
     std::condition_variable cv;
     std::mutex mtx;
     std::deque<Packet> queue;
@@ -46,7 +46,7 @@ class PacketQueue final : public Sink<Packet>, public Stream<Packet> {
         cv.notify_one();
     }
 
-    virtual std::optional<Packet> next() override {
+    std::optional<Packet> next() {
         std::unique_lock lk(mtx);
         while (queue.empty()) {
             cv.wait(lk);

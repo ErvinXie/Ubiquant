@@ -19,7 +19,7 @@ class Demux final : public Sink<Packet> {
 
     virtual void send(Packet packet) override { queues.at(packet.shard)->send(packet); }
 
-    std::shared_ptr<Stream<Packet>> get_stream_of(uint32_t shard) { return queues.at(shard); }
+    std::shared_ptr<PacketQueue> get_queue(uint32_t shard) { return queues.at(shard); }
 };
 
 std::shared_ptr<PacketQueue> tx = std::make_shared<PacketQueue>();

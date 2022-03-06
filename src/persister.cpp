@@ -9,7 +9,7 @@
 
 Persister::Persister(const char *path, int stk_id, int max_trade_count)
     : stk_id(stk_id), max_trade_cnt(max_trade_count), now_cnt(0) {
-    size_t max_size = max_trade_count * sizeof(PersistTrade);
+    size_t max_size = max_trade_count * sizeof(Trade);
     fd = ::open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         ERROR("open: %s", strerror(errno));
@@ -20,7 +20,7 @@ Persister::Persister(const char *path, int stk_id, int max_trade_count)
         throw "failed to truncate";
     }
 
-    tp = (PersistTrade *)::mmap(NULL, max_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    tp = (Trade *)::mmap(NULL, max_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (tp == MAP_FAILED) {
         ERROR("mmap: %s", strerror(errno));
         throw "failed to mmap";
@@ -30,7 +30,7 @@ Persister::Persister(const char *path, int stk_id, int max_trade_count)
 }
 
 void Persister::persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume) {
-    tp[now_cnt++] = PersistTrade{
+    tp[now_cnt++] = Trade{
         .stk_code = stk_id,
         .bid_id = (int)bid_id,
         .ask_id = (int)ask_id,
@@ -40,8 +40,8 @@ void Persister::persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32
 }
 
 Persister::~Persister() {
-    ::munmap((void *)tp, max_trade_cnt * sizeof(PersistTrade));
-    if (::ftruncate(fd, now_cnt * sizeof(PersistTrade)) < 0) {
+    ::munmap((void *)tp, max_trade_cnt * sizeof(Trade));
+    if (::ftruncate(fd, now_cnt * sizeof(Trade)) < 0) {
         ERROR("ftruncate: %s", strerror(errno));
     }
     if (::fsync(fd) < 0) {

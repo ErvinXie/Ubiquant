@@ -6,7 +6,7 @@
 #include "trade.h"
 
 class Persister {
-    struct PersistTrade {
+    struct Trade {
         int stk_code;
         int bid_id;
         int ask_id;
@@ -18,7 +18,7 @@ class Persister {
     int max_trade_cnt;
     size_t now_cnt;
 
-    PersistTrade* tp;
+    Trade* tp;
     int fd;
 
    public:

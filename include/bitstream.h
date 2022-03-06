@@ -21,10 +21,10 @@ class OBitStream {
     uint32_t seq;
     uint32_t max_num_bits;
     uint32_t cursor;
-    std::shared_ptr<Sink<Packet>> sink;
+    std::shared_ptr<PacketQueue> sink;
 
    public:
-    OBitStream(uint32_t shard, std::shared_ptr<Sink<Packet>> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
+    OBitStream(uint32_t shard, std::shared_ptr<PacketQueue> sink, uint32_t max_num_bits = CHUNK_SIZE * 8)
         : buf((max_num_bits + 7) / 8), shard(shard), seq(0), max_num_bits(max_num_bits), cursor(0), sink(sink) {}
 
     ~OBitStream() { flush(); }
@@ -61,7 +61,7 @@ class IBitStream {
     uint32_t num_bits;
     uint32_t cursor;
     std::map<uint32_t, Packet> packets;
-    std::shared_ptr<Stream<Packet>> stream;
+    std::shared_ptr<PacketQueue> stream;
 
     void fetch_packet() {
         auto it = packets.find(seq);
@@ -88,7 +88,7 @@ class IBitStream {
     }
 
    public:
-    IBitStream(uint32_t shard, std::shared_ptr<Stream<Packet>> stream) : shard(shard), stream(stream) {}
+    IBitStream(uint32_t shard, std::shared_ptr<PacketQueue> stream) : shard(shard), stream(stream) {}
 
     uint32_t get_bits(int num) {
         uint32_t ret = 0;
