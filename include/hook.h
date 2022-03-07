@@ -5,6 +5,16 @@
 #include <future>
 #include <vector>
 
+#include "common.h"
+
+struct Hook {
+    uint32_t src_stk_code;
+    uint32_t self_order_id;
+    uint32_t target_stk_code;
+    uint32_t target_trade_id;
+    uint32_t threshold;
+};
+
 class Future {
     uint32_t _M_order_id;
     std::future<bool> future;
@@ -30,12 +40,6 @@ class Promise {
 
     void resolve(uint32_t volume) { promise.set_value(volume <= threshold); }
 };
-
-inline std::pair<Future, Promise> make_hook(uint32_t order_id, uint32_t trade_id, uint32_t threshold) {
-    std::promise<bool> promise;
-    std::future<bool> future = promise.get_future();
-    return {Future(order_id, std::move(future)), Promise(trade_id, threshold, std::move(promise))};
-}
 
 class HookChecker {
     std::vector<Future> futures;
@@ -74,5 +78,7 @@ class HookNotifier {
         }
     }
 };
+
+std::vector<std::pair<HookChecker, HookNotifier>> prepare_hooks(std::vector<Hook> hooks);
 
 #endif

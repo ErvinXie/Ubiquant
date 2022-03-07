@@ -22,7 +22,7 @@ class Persister {
     int fd;
 
    public:
-    Persister(const char* path, int stk_id, int max_trade_count);
+    Persister(const char* path, int stk_id, int max_trade_count = 2 * NR_ORDERS_SINGLE);
 
     void persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume);
 

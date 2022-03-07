@@ -1,6 +1,7 @@
 #ifndef TRADE_H
 #define TRADE_H
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -24,11 +25,23 @@ struct Order {
         FOK = 5,          // 全额成交或撤销
     };
 
-    uint32_t order_id;
     Direction dir;
     OrderType type;
     uint32_t price;  // 仅限价单有意义
     uint32_t volume;
+
+    static Order from_raw(double price, int volume, int type, int direction) {
+        Order order;
+        order.type = (OrderType)type;
+        if (direction == 1) {
+            order.dir = Bid;
+        } else {
+            order.dir = Ask;
+        }
+        order.volume = volume;
+        order.price = std::lround(price * 100);
+        return order;
+    }
 };
 
 // 成交记录
