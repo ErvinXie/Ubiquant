@@ -4,10 +4,10 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
-#include <deque>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <string>
 #include <utility>
 #include <vector>
@@ -31,17 +31,19 @@ struct Packet {
         size_t num_bytes = (num_bits + 7) / 8;
         assert(num_bytes == data.size());
     }
+
+    bool operator<(const Packet& other) const { return seq > other.seq; }
 };
 
 class PacketQueue final : public Sink<Packet> {
     std::condition_variable cv;
     std::mutex mtx;
-    std::deque<Packet> queue;
+    std::priority_queue<Packet> queue;
 
    public:
     virtual void send(Packet packet) override {
         std::unique_lock lk(mtx);
-        queue.push_back(std::move(packet));
+        queue.push(std::move(packet));
         lk.unlock();
         cv.notify_one();
     }
@@ -51,16 +53,9 @@ class PacketQueue final : public Sink<Packet> {
         while (queue.empty()) {
             cv.wait(lk);
         }
-        Packet packet = std::move(queue.front());
-        queue.pop_front();
+        Packet packet = std::move(queue.top());
+        queue.pop();
         return packet;
-    }
-
-    void requeue(Packet packet) {
-        std::unique_lock lk(mtx);
-        queue.push_front(std::move(packet));
-        lk.unlock();
-        cv.notify_one();
     }
 };
 

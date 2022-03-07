@@ -90,8 +90,9 @@ class Sender {
 
             ssize_t ret = ::writev(*sockfd, iov, std::extent_v<decltype(iov)>);
             if (ret < 0) {
-                stream->requeue(std::move(packet));
+                stream->send(std::move(packet));
                 WARN("writev: %s", strerror(errno));
+                WARN("packet requeued");
                 return;
             }
         }
