@@ -1,28 +1,30 @@
 #include "processor.h"
 
+#include <cassert>
+
 void Processor::process(Order order) {
-    if (!checker.check(order.order_id)) {
+    if (!checker.check(++order_id)) {
         // filtered by hook
         return;
     }
     switch (order.type) {
         case Order::Limit:
-            process_limit(order.dir, order.order_id, order.price, order.volume);
+            process_limit(order.dir, order_id, order.price, order.volume);
             break;
         case Order::CounterBest:
-            process_counter_best(order.dir, order.order_id, order.volume);
+            process_counter_best(order.dir, order_id, order.volume);
             break;
         case Order::ClientBest:
-            process_client_best(order.dir, order.order_id, order.volume);
+            process_client_best(order.dir, order_id, order.volume);
             break;
         case Order::BestFive:
-            process_best_five(order.dir, order.order_id, order.volume);
+            process_best_five(order.dir, order_id, order.volume);
             break;
         case Order::FAK:
-            process_fak(order.dir, order.order_id, order.volume);
+            process_fak(order.dir, order_id, order.volume);
             break;
         case Order::FOK:
-            process_fok(order.dir, order.order_id, order.volume);
+            process_fok(order.dir, order_id, order.volume);
             break;
         default:
             assert(!"unrecognized order type");

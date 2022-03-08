@@ -1,40 +1,36 @@
 #ifndef PROCESSOR_H
 #define PROCESSOR_H
 
+#include "codec.h"
 #include "hook.h"
 #include "persister.h"
 #include "trade.h"
 
 // 合并器
 class OrderMerger final : Stream<Order> {
-    std::shared_ptr<Stream<Order>> local, remote;
-    std::optional<Order> buf;
-    uint32_t current;
+    OrderDecoder local, remote;
+    std::vector<bool> bitmask;
+    uint32_t current = 0;
 
    public:
-    OrderMerger(std::shared_ptr<Stream<Order>> local, std::shared_ptr<Stream<Order>> remote, uint32_t init)
-        : local(local), remote(remote), current(init) {}
+    OrderMerger(OrderDecoder local, OrderDecoder remote, std::vector<bool> bitmask)
+        : local(local), remote(remote), bitmask(bitmask) {}
 
     virtual std::optional<Order> next() override {
-        if (!buf) {
-            buf = local->next();
+        if (current >= bitmask.size()) {
+            return {};
         }
-        if (buf && buf->order_id == current) {
-            auto order = std::move(buf.value());
-            buf.reset();
-            current++;
-            return order;
+        if (bitmask[current++]) {
+            return local.next();
+        } else {
+            return remote.next();
         }
-        auto order = remote->next();
-        if (order) {
-            order->order_id = current++;
-        }
-        return order;
     }
 };
 
 // 单支股票的撮合器
 class Processor {
+    uint32_t order_id = 0;
     HookChecker checker;
     HookNotifier notifier;
     Persister persister;
@@ -50,7 +46,9 @@ class Processor {
     void commit(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume);
 
    public:
-    // Insert an order to the exchanger, return the result trades.
+    Processor(HookChecker checker, HookNotifier notifier, Persister persister)
+        : checker(std::move(checker)), notifier(std::move(notifier)), persister(std::move(persister)) {}
+
     void process(Order order);
 };
 

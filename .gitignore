@@ -1,6 +1,6 @@
 .vscode
 .DS_Store
 *.dSYM
-/build
+*.o
 exchange
 trader

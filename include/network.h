@@ -35,7 +35,7 @@ struct Packet {
     bool operator<(const Packet& other) const { return seq > other.seq; }
 };
 
-class PacketQueue final : public Sink<Packet> {
+class PacketQueue final : public Sink<Packet>, public Stream<Packet> {
     std::condition_variable cv;
     std::mutex mtx;
     std::priority_queue<Packet> queue;
@@ -48,7 +48,7 @@ class PacketQueue final : public Sink<Packet> {
         cv.notify_one();
     }
 
-    std::optional<Packet> next() {
+    virtual std::optional<Packet> next() override {
         std::unique_lock lk(mtx);
         while (queue.empty()) {
             cv.wait(lk);

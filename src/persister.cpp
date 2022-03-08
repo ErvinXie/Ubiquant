@@ -7,6 +7,8 @@
 
 #include <cassert>
 
+#include "common.h"
+
 Persister::Persister(const char *path, int stk_id, int max_trade_count)
     : stk_id(stk_id), max_trade_cnt(max_trade_count), now_cnt(0) {
     size_t max_size = max_trade_count * sizeof(Trade);

@@ -1,3 +1,6 @@
+#ifndef CODEC_H
+#define CODEC_H
+
 #include <cassert>
 #include <utility>
 
@@ -7,7 +10,7 @@
 using std::pair;
 
 class OrderEncoder final : public Sink<Order> {
-    uint32_t last_price;
+    uint32_t last_price = 0;
     OBitStream os;
 
     void encode_direction(Order::Direction dir) {
@@ -68,6 +71,8 @@ class OrderEncoder final : public Sink<Order> {
     void encode_int32(int32_t value) { os.put_bits(32, value); }
 
    public:
+    OrderEncoder(uint32_t stk_id, std::shared_ptr<Sink<Packet>> sink) : os(stk_id, sink) {}
+
     virtual void send(Order order) override {
         encode_direction(order.dir);
         encode_type_and_price(order.type, order.price);
@@ -78,7 +83,7 @@ class OrderEncoder final : public Sink<Order> {
 };
 
 class OrderDecoder final : public Stream<Order> {
-    uint32_t last_price;
+    uint32_t last_price = 0;
     IBitStream is;
 
     Order::Direction decode_direction() {
@@ -120,12 +125,13 @@ class OrderDecoder final : public Stream<Order> {
     int32_t decode_int32() { return is.get_bits(32); }
 
    public:
+    OrderDecoder(uint32_t stk_id, std::shared_ptr<Stream<Packet>> stream) : is(stk_id, stream) {}
+
     virtual std::optional<Order> next() override {
         auto dir = decode_direction();
         auto [type, price] = decode_type_and_price();
         uint32_t volume = is.get_bits(10);
         return Order{
-            .order_id = 0,
             .dir = dir,
             .type = type,
             .price = price,
@@ -133,3 +139,5 @@ class OrderDecoder final : public Stream<Order> {
         };
     }
 };
+
+#endif
