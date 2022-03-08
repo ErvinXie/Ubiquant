@@ -94,7 +94,30 @@ static std::vector<T> read_column(const char *path, const char *what, uint32_t s
 }
 
 OrderList read_orders(const char *path, uint32_t stk_code) {
+    using namespace H5;
+
+    const H5std_string file_name(path);
+
+    H5File file(file_name, H5F_ACC_RDONLY);
+    DataSet dataset = file.openDataSet("prev_close");
+
+    DataSpace dataspace = dataset.getSpace();
+    int rank = dataspace.getSimpleExtentNdims();
+
+    double last_close = 0;
+
+    hsize_t offset[1] = {stk_code};
+    hsize_t count[1] = {1};
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
+
+    hsize_t offset_out[1] = {0};
+    DataSpace memspace(1, count);
+    memspace.selectHyperslab(H5S_SELECT_SET, count, offset_out);  // select in memory
+
+    dataset.read(&last_close, PredType::NATIVE_DOUBLE, memspace, dataspace);
+
     return OrderList{
+        .last_close = last_close,
         .length = ORDER_DX / NR_STOCKS * ORDER_DY * ORDER_DZ,
         .order_id = read_column<int>(path, "order_id", stk_code),
         .price = read_column<double>(path, "price", stk_code),

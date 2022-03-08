@@ -42,9 +42,11 @@ void process_stock(uint32_t stk_id, std::shared_ptr<PacketQueue> rx_from_remote,
     for (int id : idx) {
         encoder.send(Order::from_raw(orders.price[id], orders.volume[id], orders.type[id], orders.direction[id]));
     }
-    OrderMerger merger(OrderDecoder(stk_id, self_queue), OrderDecoder(stk_id, rx_from_remote), std::move(bitmask));
-    Processor processor(std::move(checker), std::move(notifier), Persister("todo", stk_id));
-    while (auto order = merger.next()) {
+    OrderMerger order_stream(OrderDecoder(stk_id, self_queue), OrderDecoder(stk_id, rx_from_remote),
+                             std::move(bitmask));
+    Processor processor(std::move(checker), std::move(notifier), Persister("todo", stk_id),
+                        std::lround(orders.last_close / 100.0));
+    while (auto order = order_stream.next()) {
         processor.process(order.value());
     }
 }
@@ -54,6 +56,7 @@ int main() {
     std::shared_ptr<PacketQueue> tx_to_remote = std::make_shared<PacketQueue>();
 
     // todo: spawn networking threads
+
     auto hooks = prepare_hooks(read_hooks("/data/100x1000x1000/hook.h5"));
     for (int i = 0; i < NR_STOCKS; i++) {
         spawn_thread(process_stock, i, demux->get_queue(i), tx_to_remote, std::move(hooks[i].first),
@@ -61,6 +64,4 @@ int main() {
     }
 
     // event loop
-    while (true) {
-    }
 }

@@ -7,6 +7,7 @@
 #include "hook.h"
 
 struct OrderList {
+    double last_close;
     size_t length;
     std::vector<int> order_id;
     std::vector<double> price;
