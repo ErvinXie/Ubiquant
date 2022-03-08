@@ -71,9 +71,9 @@ class Processor {
     Processor(HookChecker checker, HookNotifier notifier, Persister persister,uint32_t last_price)
         : checker(std::move(checker)), notifier(std::move(notifier)), persister(std::move(persister)),
         buy_total(0),sell_total(0) {
-            max_price = last_price *1.1+0.5;
+            max_price = (last_price*11+5)/10;
             if(max_price==last_price)max_price++;
-            min_price = last_price *0.9+0.5;
+            min_price = (last_price*9+5)/10;
             if(min_price==last_price)min_price--;
         }
 
