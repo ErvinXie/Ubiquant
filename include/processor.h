@@ -83,5 +83,4 @@ class Processor {
 
     void process(Order order);
 };
-
 #endif
