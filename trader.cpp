@@ -44,7 +44,9 @@ void process_stock(uint32_t stk_id, std::shared_ptr<PacketQueue> rx_from_remote,
     }
     OrderMerger order_stream(OrderDecoder(stk_id, self_queue), OrderDecoder(stk_id, rx_from_remote),
                              std::move(bitmask));
-    Processor processor(std::move(checker), std::move(notifier), Persister("todo", stk_id),
+    std::string output_file("/data/team-4/trade-");
+    output_file += std::to_string(stk_id + 1);
+    Processor processor(std::move(checker), std::move(notifier), Persister(output_file.c_str(), stk_id),
                         std::lround(orders.last_close / 100.0));
     while (auto order = order_stream.next()) {
         processor.process(order.value());

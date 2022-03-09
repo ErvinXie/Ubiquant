@@ -194,13 +194,17 @@ void Processor::process_best_five(Order::Direction dir, uint32_t order_id, uint3
                 buy_total -= tmp.volume;
                 volume -= tmp.volume;
             } else {
-                buy.push(tmp);
+                commit(tmp.order_id, order_id, tmp.price, volume);
+                buy_total -= volume;
+                if (tmp.volume > volume) {
+                    tmp.volume -= volume;
+                    buy.push(tmp);
+                }
+                volume = 0;
+                break;
             }
-            volume = 0;
-            break;
         }
     }
-}
 }
 
 void Processor::process_fak(Order::Direction dir, uint32_t order_id, uint32_t volume) {
@@ -209,42 +213,86 @@ void Processor::process_fak(Order::Direction dir, uint32_t order_id, uint32_t vo
         while (!sell.empty() && volume) {
             tmp = sell.top();
             sell.pop();
-            commit(order_id, tmp.order_id, tmp.price, tmp.volume);
-            sell_total -= tmp.volume;
-            volume -= tmp.volume;
-        }
-        else {
-            commit(order_id, tmp.order_id, tmp.price, volume);
-            sell_total -= volume;
-            if (tmp.volume > volume) {
-                tmp.volume -= volume;
-                sell.push(tmp);
+            if (tmp.volume < volume) {
+                commit(order_id, tmp.order_id, tmp.price, tmp.volume);
+                sell_total -= tmp.volume;
+                volume -= tmp.volume;
+            } else {
+                commit(order_id, tmp.order_id, tmp.price, volume);
+                sell_total -= volume;
+                if (tmp.volume > volume) {
+                    tmp.volume -= volume;
+                    sell.push(tmp);
+                }
+                volume = 0;
+                break;
             }
-            volume = 0;
-            break;
+        }
+    } else {
+        while (!buy.empty() && volume) {
+            tmp = buy.top();
+            buy.pop();
+            if (tmp.volume < volume) {
+                commit(tmp.order_id, order_id, tmp.price, tmp.volume);
+                buy_total -= tmp.volume;
+                volume -= tmp.volume;
+            } else {
+                commit(tmp.order_id, order_id, tmp.price, volume);
+                buy_total -= volume;
+                if (tmp.volume > volume) {
+                    tmp.volume -= volume;
+                    buy.push(tmp);
+                }
+                volume = 0;
+                break;
+            }
         }
     }
 }
-else {
-    while (!buy.empty() && volume) {
-        tmp = buy.top();
-        buy.pop();
-        if (tmp.volume < volume) {
-            commit(tmp.order_id, order_id, tmp.price, tmp.volume);
-            buy_total -= tmp.volume;
-            volume -= tmp.volume;
-        } else {
-            commit(tmp.order_id, order_id, tmp.price, volume);
-            buy_total -= volume;
-            if (tmp.volume > volume) {
-                tmp.volume -= volume;
-                buy.push(tmp);
+
+void Processor::process_fok(Order::Direction dir, uint32_t order_id, uint32_t volume) {
+    ComOrder tmp;
+    if (dir == Order::Direction::Bid) {
+        if (sell_total < volume) return;
+        while (!sell.empty() && volume) {
+            tmp = sell.top();
+            sell.pop();
+            if (tmp.volume < volume) {
+                commit(order_id, tmp.order_id, tmp.price, tmp.volume);
+                sell_total -= tmp.volume;
+                volume -= tmp.volume;
+            } else {
+                commit(order_id, tmp.order_id, tmp.price, volume);
+                sell_total -= volume;
+                if (tmp.volume > volume) {
+                    tmp.volume -= volume;
+                    sell.push(tmp);
+                }
+                volume = 0;
+                break;
             }
-            volume = 0;
-            break;
+        }
+    } else {
+        if (buy_total < volume) return;
+        while (!buy.empty() && volume) {
+            tmp = buy.top();
+            buy.pop();
+            if (tmp.volume < volume) {
+                commit(tmp.order_id, order_id, tmp.price, tmp.volume);
+                buy_total -= tmp.volume;
+                volume -= tmp.volume;
+            } else {
+                commit(tmp.order_id, order_id, tmp.price, volume);
+                buy_total -= volume;
+                if (tmp.volume > volume) {
+                    tmp.volume -= volume;
+                    buy.push(tmp);
+                }
+                volume = 0;
+                break;
+            }
         }
     }
-}
 }
 
 void Processor::commit(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume) {
