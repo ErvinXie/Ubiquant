@@ -1,6 +1,8 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
@@ -64,7 +66,7 @@ std::optional<struct in_addr> parse_address(std::string address);
 void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
                     std::shared_ptr<Sink<Packet>> sink);
 
-void network_connect(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
+void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port, std::shared_ptr<PacketQueue> stream,
                      std::shared_ptr<Sink<Packet>> sink);
 
 #endif

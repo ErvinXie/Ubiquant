@@ -8,15 +8,15 @@ int main()
 
     int single_order_max = 100 * sqsize * sqsize;
 
-    int *prev_close = read_prev_close(datapath.data(), "2");
-    for (size_t i = 1; i <= 10; i++)
-    {
-        printf("stk:%d prev close price: %d cents\n", i, prev_close[i]);
-    }
+    // int *prev_close = read_prev_close(datapath.data(), "2");
+    // for (size_t i = 1; i <= 10; i++)
+    // {
+    //     printf("stk:%d prev close price: %d cents\n", i, prev_close[i]);
+    // }
 
-    return 0;
+    // return 0;
 
-    int *hook = read_hook(datapath.data());
+    // int *hook = read_hook(datapath.data());
 
     read_all(datapath.data(), "1", single_order_max, raw_orders);
     read_all(datapath.data(), "2", single_order_max, raw_orders);
@@ -25,12 +25,20 @@ int main()
 
     for (size_t i = 1; i <= 10; i++)
     {
-        std::string path = "/data/team-4/" + std::to_string(sqsize) + "-" + std::to_string(i) + ".csv";
-        std::ofstream out(path, std::ofstream::out);
-        out << "direction,price(cent),volume,type" << std::endl;
-        for (size_t j = 0; j < single_order_max; j++)
+        // std::string path = "/data/team-4/" + std::to_string(sqsize) + "-" + std::to_string(i) + ".csv";
+        // std::ofstream out(path, std::ofstream::out);
+        // out << "direction,price(cent),volume,type" << std::endl;
+        // for (size_t j = 0; j < single_order_max; j++)
+        // {
+        //     out << raw_orders[i][j].get_direction() << ","
+        //         << raw_orders[i][j].price << ","
+        //         << raw_orders[i][j].get_volume() << ","
+        //         << raw_orders[i][j].get_type() << std::endl;
+        // }
+
+        for (size_t j = 0; j < 10; j++)
         {
-            out << raw_orders[i][j].get_direction() << ","
+            std::cout << raw_orders[i][j].get_direction() << ","
                 << raw_orders[i][j].price << ","
                 << raw_orders[i][j].get_volume() << ","
                 << raw_orders[i][j].get_type() << std::endl;

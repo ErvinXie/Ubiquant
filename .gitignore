@@ -4,3 +4,4 @@
 *.o
 exchange
 trader
+/package

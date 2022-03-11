@@ -26,6 +26,36 @@ class Fd {
     operator int() { return fd; }
 };
 
+struct PacketHeader {
+    uint32_t shard;
+    uint32_t seq;
+    uint32_t num_bits;
+};
+
+void read_exact(int fd, char* buf, size_t nbytes) {
+    size_t bytes_read = 0;
+    while (bytes_read < nbytes) {
+        ssize_t ret = ::read(fd, buf + bytes_read, nbytes - bytes_read);
+        if (ret < 0) {
+            ERROR("read: %s\n", strerror(errno));
+            throw "read failed";
+        }
+        bytes_read += ret;
+    }
+}
+
+void write_exact(int fd, const char* buf, size_t nbytes) {
+    size_t bytes_written = 0;
+    while (bytes_written < nbytes) {
+        ssize_t ret = ::write(fd, buf + bytes_written, nbytes - bytes_written);
+        if (ret < 0) {
+            ERROR("write: %s\n", strerror(errno));
+            throw "write failed";
+        }
+        bytes_written += ret;
+    }
+}
+
 class Receiver {
     std::shared_ptr<Fd> sockfd;
     std::shared_ptr<Sink<Packet>> sink;
@@ -35,34 +65,13 @@ class Receiver {
 
     void run() {
         while (true) {
-            uint32_t shard;
-            uint32_t seq;
-            uint32_t num_bits;
+            PacketHeader header;
+            read_exact(*sockfd, (char*)&header, sizeof header);
 
-            const struct iovec iov[] = {
-                iovec{.iov_base = &shard, .iov_len = sizeof shard},
-                iovec{.iov_base = &seq, .iov_len = sizeof seq},
-                iovec{.iov_base = &num_bits, .iov_len = sizeof num_bits},
-            };
-            {
-                ssize_t ret = ::readv(*sockfd, iov, std::extent_v<decltype(iov)>);
-                if (ret < (ssize_t)(sizeof shard + sizeof seq + sizeof num_bits)) {
-                    WARN("readv: %s", strerror(errno));
-                    return;
-                }
-            }
+            std::vector<uint8_t> buffer((header.num_bits + 7) / 8);
+            read_exact(*sockfd, (char*)buffer.data(), buffer.size());
 
-            size_t bytes = (num_bits + 7) / 8;
-            std::vector<uint8_t> buffer(bytes);
-            {
-                ssize_t ret = ::read(*sockfd, buffer.data(), bytes);
-                if (ret < (ssize_t)bytes) {
-                    WARN("read: %s", strerror(errno));
-                    return;
-                }
-            }
-
-            Packet packet{.shard = shard, .seq = seq, .num_bits = num_bits, .data = buffer};
+            Packet packet{.shard = header.shard, .seq = header.seq, .num_bits = header.num_bits, .data = buffer};
             packet.check_well_formedness();
             sink->send(std::move(packet));
         }
@@ -81,20 +90,14 @@ class Sender {
             Packet packet = std::move(optional_packet.value());
             packet.check_well_formedness();
 
-            const struct iovec iov[] = {
-                iovec{.iov_base = &packet.shard, .iov_len = sizeof packet.shard},
-                iovec{.iov_base = &packet.seq, .iov_len = sizeof packet.seq},
-                iovec{.iov_base = &packet.num_bits, .iov_len = sizeof packet.num_bits},
-                iovec{.iov_base = packet.data.data(), .iov_len = packet.data.size()},
+            PacketHeader header{
+                .shard = packet.shard,
+                .seq = packet.seq,
+                .num_bits = packet.num_bits,
             };
 
-            ssize_t ret = ::writev(*sockfd, iov, std::extent_v<decltype(iov)>);
-            if (ret < 0) {
-                stream->send(std::move(packet));
-                WARN("writev: %s", strerror(errno));
-                WARN("packet requeued");
-                return;
-            }
+            write_exact(*sockfd, (const char*)&header, sizeof header);
+            write_exact(*sockfd, (const char*)packet.data.data(), packet.data.size());
         }
     }
 };
@@ -117,19 +120,19 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
         int fd = ::socket(PF_INET, SOCK_STREAM, 0);
 
         if (fd < 0) {
-            ERROR("socket: %s", strerror(errno));
+            ERROR("socket: %s\n", strerror(errno));
             throw "failed to create socket";
         }
 
         Fd sockfd(fd);
 
         if (::bind(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
-            ERROR("bind: %s", strerror(errno));
+            ERROR("bind: %s\n", strerror(errno));
             throw "failed to bind address to socket";
         }
 
         if (::listen(sockfd, BACKLOG_SIZE) < 0) {
-            ERROR("listen: %s", strerror(errno));
+            ERROR("listen: %s\n", strerror(errno));
             throw "failed to listen";
         }
 
@@ -138,10 +141,10 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
         while (true) {
             int streamfd = ::accept(sockfd, &client_address, &address_len);
             if (streamfd < 0) {
-                ERROR("accept: %s", strerror(errno));
+                ERROR("accept: %s\n", strerror(errno));
                 throw "failed to accept connection";
             }
-
+            DEBUG("listen connected\n");
             std::shared_ptr<Fd> fd = std::make_shared<Fd>(streamfd);
 
             // spawn receiver thread
@@ -159,27 +162,35 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
     });
 }
 
-void network_connect(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
-                     std::shared_ptr<Sink<Packet>> sink) {
+void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port,
+                     std::shared_ptr<PacketQueue> stream, std::shared_ptr<Sink<Packet>> sink) {
     struct sockaddr_in sa {
         .sin_family = AF_INET, .sin_port = port, .sin_addr = addr
+    };
+    struct sockaddr_in self_sa {
+        .sin_family = AF_INET, .sin_port = self_port, .sin_addr = self_addr
     };
     spawn_thread([=] {
         int sockfd = ::socket(PF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            ERROR("socket: %s", strerror(errno));
+            ERROR("socket: %s\n", strerror(errno));
             throw "failed to create socket";
+        }
+
+        if (::bind(sockfd, reinterpret_cast<const sockaddr*>(&self_sa), sizeof(self_sa)) < 0) {
+            ERROR("bind: %s\n", strerror(errno));
+            throw "failed to bind address to socket";
         }
 
         std::shared_ptr<Fd> fd = std::make_shared<Fd>(sockfd);
 
         while (::connect(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
             using namespace std::chrono_literals;
-            WARN("connect: %s", strerror(errno));
-            INFO("attempt to retry connection");
+            WARN("connect: %s\n", strerror(errno));
+            INFO("attempt to retry connection\n");
             std::this_thread::sleep_for(1000ms);
         }
-
+        DEBUG("connected connected\n");
         // spawn receiver thread
         spawn_thread([=] {
             Receiver rx(fd, sink);

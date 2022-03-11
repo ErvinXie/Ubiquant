@@ -14,37 +14,42 @@ using std::size_t;
 using std::uint32_t;
 
 template <class Function, class... Args>
-void spawn_thread(Function&& f, Args&&... args) {
+void spawn_thread(Function &&f, Args &&...args)
+{
     std::thread(std::forward<Function>(f), std::forward<Args>(args)...).detach();
 }
 
 template <typename T>
-struct Sink {
-   protected:
+struct Sink
+{
+protected:
     ~Sink() = default;
 
-   public:
+public:
     virtual void send(T x) = 0;
 };
 
 template <typename T>
-struct Stream {
-   protected:
+struct Stream
+{
+protected:
     ~Stream() = default;
 
-   public:
+public:
     virtual std::optional<T> next() = 0;
 };
 
 template <typename T>
-struct Tee final : Sink<T> {
-   private:
+struct Tee final : Sink<T>
+{
+private:
     std::shared_ptr<Sink<T>> left, right;
 
-   public:
+public:
     Tee(std::shared_ptr<Sink<T>> left, std::shared_ptr<Sink<T>> right) : left(left), right(right) {}
 
-    virtual void send(T x) override {
+    virtual void send(T x) override
+    {
         left->send(x);
         right->send(std::move(x));
     }
@@ -58,9 +63,11 @@ struct Tee final : Sink<T> {
 constexpr size_t NR_STOCKS = 10;
 
 constexpr size_t ORDER_DX = 500;
-constexpr size_t ORDER_DY = 1000;
-constexpr size_t ORDER_DZ = 1000;
-constexpr size_t NR_ORDERS_SINGLE = ORDER_DX * ORDER_DY * ORDER_DZ;
+constexpr size_t ORDER_DY = 10;
+constexpr size_t ORDER_DZ = 10;
+constexpr size_t NR_ORDERS_SINGLE_STK_HALF = ORDER_DX * ORDER_DY * ORDER_DZ / NR_STOCKS;
+
+constexpr size_t READ_SLICE_SIZE = 50;
 
 constexpr size_t HOOK_DX = 10;
 constexpr size_t HOOK_DY = 100;

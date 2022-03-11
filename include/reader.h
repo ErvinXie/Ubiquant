@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "common.h"
+#include "config.h"
 #include "hook.h"
 
 struct OrderList {
@@ -18,6 +19,6 @@ struct OrderList {
 
 std::vector<Hook> read_hooks(const char* path);
 
-OrderList read_orders(const char* path, uint32_t stk_id);
+OrderList read_orders(Config& conf, uint32_t stk_id);
 
 #endif

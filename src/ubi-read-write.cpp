@@ -1,3 +1,5 @@
+#include "ubi-read-write.h"
+
 #include <algorithm>
 #include <bitset>
 #include <cassert>
@@ -13,101 +15,9 @@ namespace fs = std::filesystem;
 
 using namespace H5;
 
-// the order struct given by the pdf
-struct given_order
-{
-    int stk_code;
-    int order_id;
-    int direction; // 1 buy; -1 sell;
-    int type;
-    double price;
-    int volume;
-};
-
-struct hook
-{
-    int self_order_id;
-    int target_stk_code;
-    int target_trade_idx;
-    int arg;
-};
-
-// raw order struct when reading and sorting
-struct raw_order
-{
-    int16_t volume__type__direction;
-    int32_t price;
-
-    void set_price(double price) { this->price = static_cast<int32_t>(price * 100); }
-    void set_volume(int volume)
-    {
-        volume__type__direction = volume__type__direction & (0b1111000000000000);
-        volume__type__direction = volume__type__direction | static_cast<int16_t>(volume);
-    }
-    int get_volume() { return volume__type__direction & 0b0000111111111111; }
-
-    void set_type(int type)
-    {
-        volume__type__direction = volume__type__direction & (0b1000111111111111);
-        volume__type__direction = volume__type__direction | (static_cast<int16_t>(type) << 12);
-    }
-
-    int get_type() { return (volume__type__direction & 0b0111000000000000) >> 12; }
-
-    void set_direction(int direction)
-    {
-        if (direction == 1)
-            volume__type__direction = volume__type__direction & (0b0111111111111111);
-        else if (direction == -1)
-            volume__type__direction = volume__type__direction | (0b1000000000000000);
-        else
-            assert(false);
-    };
-
-    int get_direction()
-    {
-        if (volume__type__direction >= 0)
-        {
-            return 1;
-        }
-        else
-        {
-            return -1;
-        }
-    }
-
-    void debug()
-    {
-        if (get_direction() == 1)
-        {
-            printf(" buy %d with $ %d type %d\n", get_volume(), this->price, get_type());
-        }
-
-        else if (get_direction() == -1)
-        {
-            printf(" sell %d with $ %d type %d\n", get_volume(), this->price, get_type());
-        }
-        else
-        {
-            assert(false);
-        }
-    }
-
-    raw_order order_compress(given_order x)
-    {
-        raw_order r;
-        r.set_price(x.price);
-        r.set_volume(x.volume);
-        r.set_type(x.type);
-        r.set_direction(x.direction);
-        return r;
-    }
-};
-
 template <typename T>
-void read_one_data(char *path_100x1000x1000, char *trader, char *what, raw_order *raw_orders[], int max_order,
-                   int *order_id_p)
-{
+void read_one_data(const char *path_100x1000x1000, const char *trader, const char *what, raw_order *raw_orders[],
+                   int max_order, int *order_id_p) {
     std::string swhat(what), spath(path_100x1000x1000), strader(trader);
     fs::path dir(spath);
     fs::path fname(swhat + strader + ".h5");
@@ -138,12 +48,11 @@ void read_one_data(char *path_100x1000x1000, char *trader, char *what, raw_order
     NY_SUB = dims_out[1];
     NZ_SUB = dims_out[2];
 
-    const int DX = 50;
+    const int DX = READ_SLICE_SIZE;
     int buffer_size = 10 * max_order / (NX_SUB / DX);
     assert(NX_SUB % DX == 0);
     printf("Data Read Size: %lf GB\n", sizeof(T) * buffer_size * 1.0);
-    for (size_t xidx = 0; xidx < NX_SUB; xidx += DX)
-    {
+    for (size_t xidx = 0; xidx < NX_SUB; xidx += DX) {
         printf("reading x %d\n", xidx);
 
         T *data_read = new T[buffer_size];
@@ -157,7 +66,7 @@ void read_one_data(char *path_100x1000x1000, char *trader, char *what, raw_order
         count[0] = DX;
         count[1] = NY_SUB;
         count[2] = NZ_SUB;
-        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset); // select in file, this api can set api
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
 
         hsize_t dimsm[3];
         dimsm[0] = DX;
@@ -173,56 +82,39 @@ void read_one_data(char *path_100x1000x1000, char *trader, char *what, raw_order
         count_out[0] = DX;
         count_out[1] = NY_SUB;
         count_out[2] = NZ_SUB;
-        memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out); // select in memory
+        memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
 
         auto predtype = PredType(PredType::NATIVE_INT);
-        if (std::is_same<T, int>())
-        {
-        }
-        else if (std::is_same<T, double>())
-        {
+        if (std::is_same<T, int>()) {
+        } else if (std::is_same<T, double>()) {
             predtype = PredType::NATIVE_DOUBLE;
-        }
-        else
-        {
+        } else {
             assert(false);
         }
 
         dataset.read(data_read, predtype, memspace, dataspace);
         for (size_t x = xidx; x < xidx + DX; x++)
-            for (size_t y = 0; y < NY_SUB; y++)
-            {
-                for (size_t z = 0; z < NZ_SUB; z++)
-                {
+            for (size_t y = 0; y < NY_SUB; y++) {
+                for (size_t z = 0; z < NZ_SUB; z++) {
                     int mempos = (x - xidx) * (NY_SUB * NZ_SUB) + y * NZ_SUB + z;
                     int pos = x * (NY_SUB * NZ_SUB) + y * NZ_SUB + z;
                     T d = data_read[mempos];
 
                     int order_id = order_id_p[pos];
-                    if (order_id > max_order)
-                    {
+                    if (order_id > max_order) {
                         assert(false);
                     }
 
                     int stk_id = x % 10 + 1;
-                    if (swhat == "direction")
-                    {
+                    if (swhat == "direction") {
                         raw_orders[stk_id][order_id].set_direction(d);
-                    }
-                    else if (swhat == "type")
-                    {
+                    } else if (swhat == "type") {
                         raw_orders[stk_id][order_id].set_type(d);
-                    }
-                    else if (swhat == "price")
-                    {
+                    } else if (swhat == "price") {
                         raw_orders[stk_id][order_id].set_price(d);
-                    }
-                    else if (swhat == "volume")
-                    {
+                    } else if (swhat == "volume") {
                         raw_orders[stk_id][order_id].set_volume(d);
-                    }
-                    else
-                    {
+                    } else {
                         assert(false);
                     }
                 }
@@ -232,8 +124,7 @@ void read_one_data(char *path_100x1000x1000, char *trader, char *what, raw_order
     }
 }
 
-int *read_order_id(char *path_100x1000x1000, char *trader, int max_order)
-{
+int *read_order_id(const char *path_100x1000x1000, const char *trader, int max_order) {
     std::string swhat("order_id"), spath(path_100x1000x1000), strader(trader);
     fs::path dir(spath);
     fs::path fname(swhat + strader + ".h5");
@@ -276,7 +167,7 @@ int *read_order_id(char *path_100x1000x1000, char *trader, int max_order)
     count[0] = NX_SUB;
     count[1] = NY_SUB;
     count[2] = NZ_SUB;
-    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset); // select in file, this api can set api
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
 
     hsize_t dimsm[3];
     dimsm[0] = NX_SUB;
@@ -292,15 +183,14 @@ int *read_order_id(char *path_100x1000x1000, char *trader, int max_order)
     count_out[0] = NX_SUB;
     count_out[1] = NY_SUB;
     count_out[2] = NZ_SUB;
-    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out); // select in memory
+    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
 
     dataset.read(data_read, PredType::NATIVE_INT, memspace, dataspace);
 
     return data_read;
 }
 
-int *read_prev_close(char *path_100x1000x1000, char *trader)
-{
+int *read_prev_close(const char *path_100x1000x1000, const char *trader) {
     std::string swhat("price"), spath(path_100x1000x1000), strader(trader);
     fs::path dir(spath);
     fs::path fname(swhat + strader + ".h5");
@@ -334,7 +224,7 @@ int *read_prev_close(char *path_100x1000x1000, char *trader)
     offset[0] = 0;
     count[0] = NX_SUB;
 
-    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset); // select in file, this api can set api
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
 
     hsize_t dimsm[1];
     dimsm[0] = NX_SUB;
@@ -345,24 +235,22 @@ int *read_prev_close(char *path_100x1000x1000, char *trader)
     offset_out[0] = 0;
 
     count_out[0] = NX_SUB;
-    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out); // select in memory
+    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
 
     dataset.read(data_read, PredType::NATIVE_DOUBLE, memspace, dataspace);
 
     int *re = new int[11];
-    for (size_t i = 0; i < NX_SUB; i++)
-    {
-        re[i+1] = static_cast<int>( data_read[i]*100); 
+    for (size_t i = 0; i < NX_SUB; i++) {
+        re[i + 1] = static_cast<int>(data_read[i] * 100);
         // printf("%lf\n", data_read[i]);
     }
-    
+
     delete[] data_read;
 
     return re;
 }
 
-int *read_hook(const char *path)
-{
+int *read_hook(const char *path) {
     const H5std_string file_name(path);
     const H5std_string dataset_name("hook");
 
@@ -377,9 +265,9 @@ int *read_hook(const char *path)
 
     printf("rank %d, shape (%llu, %llu, %llu)\n", rank, dims_out[0], dims_out[1], dims_out[2]);
 
-    int NX_SUB;
-    int NY_SUB;
-    int NZ_SUB;
+    hsize_t NX_SUB;
+    hsize_t NY_SUB;
+    hsize_t NZ_SUB;
 
     const int RANK_OUT = 3;
 
@@ -392,7 +280,7 @@ int *read_hook(const char *path)
 
     hsize_t offset[] = {0, 0, 0};
     hsize_t count[] = {NX_SUB, NY_SUB, NZ_SUB};
-    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset); // select in file, this api can set api
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
 
     hsize_t dimsm[] = {NX_SUB, NY_SUB, NZ_SUB};
     DataSpace memspace(RANK_OUT, dimsm);
@@ -402,16 +290,15 @@ int *read_hook(const char *path)
     count_out[0] = NX_SUB;
     count_out[1] = NY_SUB;
     count_out[2] = NZ_SUB;
-    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out); // select in memory
+    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
 
     dataset.read(data_read, PredType::NATIVE_INT, memspace, dataspace);
 
     return data_read;
 }
 
-void read_all(char *path_100x1000x1000, char *trader, int single_stk_order_size, raw_order *raw_orders[])
-{
-    char *whats[] = {
+void read_all(const char *path_100x1000x1000, const char *trader, int single_stk_order_size, raw_order *raw_orders[]) {
+    const char *whats[] = {
         "direction",
         "type",
         "price",
@@ -419,10 +306,8 @@ void read_all(char *path_100x1000x1000, char *trader, int single_stk_order_size,
     };
     int64_t total_size = single_stk_order_size * sizeof(raw_order) * 10;
     printf("Raw Order Total Size: %lld B, %lf GB\n", total_size, total_size / 1e9);
-    for (size_t i = 1; i <= 10; i++)
-    {
-        if (raw_orders[i] == nullptr)
-        {
+    for (size_t i = 1; i <= 10; i++) {
+        if (raw_orders[i] == nullptr) {
             raw_orders[i] = new raw_order[single_stk_order_size + 1];
         }
     }
@@ -430,24 +315,18 @@ void read_all(char *path_100x1000x1000, char *trader, int single_stk_order_size,
     printf("reading order\n");
     int *oid = read_order_id(path_100x1000x1000, trader, single_stk_order_size);
 
-    for (auto what : whats)
-    {
+    for (auto what : whats) {
         printf("\nreading %s\n", what);
-        if (what == "price")
-        {
+        if (strcmp(what, "price") == 0) {
             read_one_data<double>(path_100x1000x1000, trader, what, raw_orders, single_stk_order_size, oid);
-        }
-        else
-        {
+        } else {
             read_one_data<int>(path_100x1000x1000, trader, what, raw_orders, single_stk_order_size, oid);
         }
     }
     delete[] oid;
-    for (size_t i = 1; i <= 10; i++)
-    {
+    for (size_t i = 1; i <= 10; i++) {
         printf("stock:%d\n", i);
-        for (size_t j = 1; j <= 10; j++)
-        {
+        for (size_t j = 1; j <= 10; j++) {
             printf("order_id:%d ", j);
             raw_orders[i][j].debug();
         }
@@ -456,4 +335,22 @@ void read_all(char *path_100x1000x1000, char *trader, int single_stk_order_size,
         //     raw_orders[i][j].debug();
         // }
     }
+}
+
+Order OrderIterator::next() {
+    while (start[now_cnt].price == -1) {
+        now_cnt++;
+    }
+    Order x = Order::from_raw(start[now_cnt].price / 100.0, start[now_cnt].get_volume(), start[now_cnt].get_type(),
+                              start[now_cnt].get_direction());
+    now_cnt++;
+    return x;
+}
+
+size_t OrderIterator::next_order_id() {
+    while (start[now_cnt].price == -1) {
+        now_cnt++;
+    }
+    now_cnt++;
+    return now_cnt - 2;
 }

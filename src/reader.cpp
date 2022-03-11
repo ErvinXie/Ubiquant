@@ -40,12 +40,13 @@ std::vector<Hook> read_hooks(const char *path) {
             ret.push_back(Hook{
                 .src_stk_code = (uint32_t)stk_code,
                 .self_order_id = (uint32_t)data_read[stk_code][i][0],
-                .target_stk_code = (uint32_t)data_read[stk_code][i][1],
+                .target_stk_code = (uint32_t)data_read[stk_code][i][1] - 1,
                 .target_trade_id = (uint32_t)data_read[stk_code][i][2],
                 .threshold = (uint32_t)data_read[stk_code][i][3],
             });
         }
     }
+    INFO("hook read (%d,%d,%d)\n", dims_out[0], dims_out[1], dims_out[2]);
     return ret;
 }
 
@@ -73,30 +74,34 @@ static std::vector<T> read_column(const char *path, const char *what, uint32_t s
     std::vector<T> data_read(total_size);
 
     for (size_t x = stk_code; x < ORDER_DX; x += NR_STOCKS) {
+        DEBUG("stk %d %s sqaure %d\n", stk_code, what, x);
         hsize_t offset[] = {x, 0, 0};
         hsize_t count[] = {1, ORDER_DY, ORDER_DZ};
         dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
 
         hsize_t out_offset[] = {x / NR_STOCKS, 0, 0};
         hsize_t out_count[] = {1, ORDER_DY, ORDER_DZ};
-        DataSpace memspace(3, count);
+        hsize_t mem_count[] = {ORDER_DX / NR_STOCKS, ORDER_DY, ORDER_DZ};
+        DataSpace memspace(3, mem_count);
         memspace.selectHyperslab(H5S_SELECT_SET, out_count, out_offset);
 
+        static_assert(std::is_same_v<T, int> || std::is_same_v<T, double>, "invalid data type");
         if constexpr (std::is_same_v<T, int>) {
             dataset.read(data_read.data(), PredType::NATIVE_INT, memspace, dataspace);
         } else if constexpr (std::is_same_v<T, double>) {
             dataset.read(data_read.data(), PredType::NATIVE_DOUBLE, memspace, dataspace);
         } else {
-            static_assert(std::is_same_v<T, int> || std::is_same_v<T, double>, "invalid data type");
+            assert(!"unreachable");
         }
     }
+
     return data_read;
 }
 
-OrderList read_orders(const char *path, uint32_t stk_code) {
+OrderList read_orders(Config &conf, uint32_t stk_code) {
     using namespace H5;
 
-    const H5std_string file_name(path);
+    const H5std_string file_name(conf.what_path("price").c_str());
 
     H5File file(file_name, H5F_ACC_RDONLY);
     DataSet dataset = file.openDataSet("prev_close");
@@ -119,10 +124,10 @@ OrderList read_orders(const char *path, uint32_t stk_code) {
     return OrderList{
         .last_close = last_close,
         .length = ORDER_DX / NR_STOCKS * ORDER_DY * ORDER_DZ,
-        .order_id = read_column<int>(path, "order_id", stk_code),
-        .price = read_column<double>(path, "price", stk_code),
-        .volume = read_column<int>(path, "volume", stk_code),
-        .type = read_column<int>(path, "type", stk_code),
-        .direction = read_column<int>(path, "direction", stk_code),
+        .order_id = read_column<int>(conf.what_path("order_id").c_str(), "order_id", stk_code),
+        .price = read_column<double>(conf.what_path("price").c_str(), "price", stk_code),
+        .volume = read_column<int>(conf.what_path("volume").c_str(), "volume", stk_code),
+        .type = read_column<int>(conf.what_path("type").c_str(), "type", stk_code),
+        .direction = read_column<int>(conf.what_path("direction").c_str(), "direction", stk_code),
     };
 }
