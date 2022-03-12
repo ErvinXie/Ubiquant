@@ -1,5 +1,5 @@
 HDF5 := h5c++
-HDF5FLAGS += -Wall -I./include 
+HDF5FLAGS += -Wall -I./include -g
 
 INCLUDES := $(shell find ./include -name "*.h")
 SRCS := $(shell find ./src -name "*.cpp")
@@ -25,5 +25,5 @@ maintain: $(MAINTAIN_DEP)
 	$(HDF5) $(HDF5FLAGS) -o $@ $^
 
 clean:
-	rm -rf *.o exchange trader maintain ubi-read-test /pack
+	rm -rf *.o exchange trader maintain ubi-read-test /package
 

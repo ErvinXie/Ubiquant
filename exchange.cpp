@@ -6,6 +6,7 @@ int main(int argc, char *argv[]) {
     auto conf = Config::parse_config(argc, argv);
 
     auto selfip = parse_address(conf.ip[conf.id]).value();
+    auto allip = parse_address(std::string("0.0.0.0")).value();
 
     for (size_t i = 0; i < 3; i++) {
         network_listen(selfip, conf.open_ports[conf.id][0][i], queues[0], queues[1]);

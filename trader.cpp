@@ -35,9 +35,11 @@ void process_stock(uint32_t stk_id, std::shared_ptr<PacketQueue> rx_from_remote,
 
     OrderIterator *iter = new OrderIterator(raw_orders);
 
+
     for (size_t i = 0; i < NR_ORDERS_SINGLE_STK_HALF; i++) {
         bitmask[iter->next_order_id()] = true;
     }
+    
     iter->now_cnt = 1;
 
     auto self_queue = std::make_shared<PacketQueue>();
@@ -88,7 +90,7 @@ int main(int argc, char *argv[]) {
     int *prev_close = read_prev_close(conf.data_path.c_str(), std::to_string(conf.id + 1).c_str());
     auto hooks = prepare_hooks(read_hooks(conf.hook_path().c_str()));
 
-    for (size_t i = 0; i < NR_STOCKS; i++) {
+    for (size_t i = 0; i < 10; i++) {
         spawn_thread(process_stock, i, demux->get_queue(i), tx_to_remote, std::move(hooks[i].first),
                      std::move(hooks[i].second), conf, raw_orders[i + 1], prev_close[i + 1] / 100.0);
     }
