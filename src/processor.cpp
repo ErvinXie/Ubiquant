@@ -33,7 +33,6 @@ void Processor::process(Order order) {
 
 void Processor::process_limit(Order::Direction dir, uint32_t order_id, uint32_t price, uint32_t volume) {
     if (price < min_price || price > max_price) {
-        DEBUG("invalid order: < min_price or > max_price");
         return;
     }
     ComOrder tmp;
@@ -90,13 +89,13 @@ void Processor::process_counter_best(Order::Direction dir, uint32_t order_id, ui
     ComOrder tmp;
     if (dir == Order::Direction::Bid) {
         if (sell.empty()) {
-            DEBUG("invalid order: counter empty");
+            // DEBUG("invalid order: counter empty");
         } else {
             process_limit(dir, order_id, sell.top().price, volume);
         }
     } else if (dir == Order::Direction::Ask) {
         if (buy.empty()) {
-            DEBUG("invalid order: counter empty");
+            // DEBUG("invalid order: counter empty");
         } else {
             process_limit(dir, order_id, buy.top().price, volume);
         }

@@ -5,6 +5,24 @@
 #include <iostream>
 #include <filesystem>
 #include <vector>
+#include "common.h"
+
+struct Measure{
+    int stk_id_form_0;
+    int order_into_trader;
+    int trade_outfrom_trader;
+    int order_on_board;
+
+    void info(){
+        printf("stk:%d, orders(received:%d,on_board:%d) trade(out:%d)\n",stk_id_form_0+1,order_into_trader,order_on_board,trade_outfrom_trader);
+    }
+    Measure(int stk_id=-1):stk_id_form_0(stk_id){
+        order_into_trader = 0;
+        trade_outfrom_trader = 0;
+        order_on_board = 0;
+    };
+
+};
 
 struct Config
 {
@@ -105,101 +123,12 @@ struct Config
     }
 };
 
-inline std::vector<std::string> split(std::string s, char c)
-{
-    std::stringstream ss(s);
-    std::vector<std::string> re;
-    std::string x;
-    while (std::getline(ss, x))
-    {
-        re.push_back(x);
-    }
-    return re;
-}
+std::vector<std::string> split(std::string s, char c);
+void change_port(int previous, int now);
+void cmd(std::string x, Config &conf);
+void cui(Config &conf);
+void maintain(int argc, char *argv[]);
 
-inline void change_port(int previous, int now)
-{
-}
-
-inline void cmd(std::string x, Config &conf)
-{
-    auto xs = split(x, ' ');
-    if (xs.empty())
-    {
-        printf(
-            "Usage:\n"
-            "       q, exit\n"
-            "       set portA portB, set connection from portA to portB\n");
-        return;
-    }
-    if (xs[0] == "set")
-    {
-        if (xs.size() != 3)
-        {
-            printf(
-                "Usage:\n"
-                "       q, exit\n"
-                "       set portA portB, set connection from portA to portB\n");
-            return;
-        }
-
-        auto previous = std::stoi(xs[1]);
-        auto now = std::stoi(xs[2]);
-
-        bool ok = false;
-        for (size_t i = 0; i < 4; i++)
-        {
-            if (conf.has_connection[conf.id][i])
-            {
-                for (size_t k = 0; k < 3; k++)
-                {
-                    if (conf.open_ports[conf.id][i][k] == previous)
-                    {
-                        conf.open_ports[conf.id][i][k] = now;
-                        printf("change %s to %d, from %d to %d\n", conf.identity_string(), i, previous, now);
-                        change_port(previous, now);
-                        ok = true;
-                    }
-                }
-            }
-        }
-    }
-    else if (xs[0] == "info")
-    {
-        conf.info();
-    }
-    else
-    {
-        printf(
-            "Usage:\n"
-            "       q, exit\n"
-            "       set portA portB, set connection from portA to portB\n");
-    }
-}
-
-inline void cui(Config &conf)
-{
-    std::string x;
-    std::cout << ":";
-    while (std::getline(std::cin, x))
-    {
-        if (x == "q")
-        {
-            break;
-        }
-        cmd(x, conf);
-        std::cout << ":";
-    }
-
-    std::cout << "Bye" << std::endl;
-}
-
-inline void maintain(int argc, char *argv[])
-{
-    auto conf = Config::parse_config(argc, argv);
-    std::cout << "Confirm Config Info" << std::endl;
-    conf.info();
-    cui(conf);
-}
+Measure* getMeasure(int stk_id_from_0);
 
 #endif

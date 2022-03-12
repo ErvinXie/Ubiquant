@@ -46,7 +46,7 @@ std::vector<Hook> read_hooks(const char *path) {
             });
         }
     }
-    INFO("hook read (%d,%d,%d)\n", dims_out[0], dims_out[1], dims_out[2]);
+    INFO("hook read (%lld, %lld, %lld)", dims_out[0], dims_out[1], dims_out[2]);
     return ret;
 }
 

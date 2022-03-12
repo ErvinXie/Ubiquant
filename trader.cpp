@@ -31,6 +31,7 @@ class Demux final : public Sink<Packet> {
 void process_stock(uint32_t stk_id, std::shared_ptr<PacketQueue> rx_from_remote,
                    std::shared_ptr<PacketQueue> tx_to_remote, HookChecker &checker, HookNotifier &notifier, Config conf,
                    raw_order *raw_orders, uint32_t prev_close) {
+    getMeasure(stk_id)->stk_id_form_0 = stk_id;
     std::vector<bool> bitmask(NR_ORDERS_SINGLE_STK_HALF * 2);
 
     OrderIterator iter(raw_orders);
@@ -57,7 +58,9 @@ void process_stock(uint32_t stk_id, std::shared_ptr<PacketQueue> rx_from_remote,
     Processor processor(stk_id, std::move(checker), std::move(notifier), Persister(output_file.c_str(), stk_id),
                         prev_close);
     DEBUG("Processing Stock %u", stk_id);
+    int order_id_debug = 1;
     while (auto order = order_stream.next()) {
+        getMeasure(stk_id)->order_into_trader+=1;
         processor.process(order.value());
     }
     INFO("stock %u finished", stk_id);

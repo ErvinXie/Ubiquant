@@ -32,7 +32,7 @@ struct raw_order {
     int16_t volume__type__direction;
     int32_t price = -1;
 
-    void set_price(double price) { this->price = static_cast<int32_t>(price * 100); }
+    void set_price(double price) { this->price = lround(price * 100); }
     void set_volume(int volume) {
         volume__type__direction = volume__type__direction & (0b1111000000000000);
         volume__type__direction = volume__type__direction | static_cast<int16_t>(volume);

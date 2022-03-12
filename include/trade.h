@@ -30,8 +30,9 @@ struct Order {
     uint32_t price;  // 仅限价单有意义
     uint32_t volume;
 
-    static Order from_raw(double price, int volume, int type, int direction) {
+    static Order from_raw(uint32_t price, int volume, int type, int direction) {
         Order order;
+        assert(0 <= type && type < 6);
         order.type = (OrderType)type;
         if (direction == 1) {
             order.dir = Bid;
@@ -39,7 +40,7 @@ struct Order {
             order.dir = Ask;
         }
         order.volume = volume;
-        order.price = std::lround(price * 100);
+        order.price = price;
         return order;
     }
 

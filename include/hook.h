@@ -53,7 +53,7 @@ class HookChecker {
     std::vector<Future> futures;
 
    public:
-    HookChecker(std::vector<Future>&& futures) : futures(std::move(futures)) {
+    HookChecker(std::vector<Future>&& _futures) : futures(std::move(_futures)) {
         std::sort(futures.begin(), futures.end(),
                   [](const Future& first, const Future& second) { return first.order_id() > second.order_id(); });
     }
@@ -70,11 +70,11 @@ class HookChecker {
 };
 
 class HookNotifier {
-    uint32_t idx = 1;
+    uint32_t idx = 0;
     std::vector<Promise> promises;
 
    public:
-    HookNotifier(std::vector<Promise>&& promises) : promises(std::move(promises)) {
+    HookNotifier(std::vector<Promise>&& _promises) : promises(std::move(_promises)) {
         std::sort(promises.begin(), promises.end(),
                   [](const Promise& first, const Promise& second) { return first.trade_idx() > second.trade_idx(); });
     }
@@ -84,7 +84,8 @@ class HookNotifier {
     HookNotifier& operator=(HookNotifier&&) = default;
 
     void notify(uint32_t volume) {
-        if (!promises.empty() && promises.back().trade_idx() == idx++) {
+        idx++;
+        while (!promises.empty() && promises.back().trade_idx() == idx) {
             promises.back().resolve(volume);
             promises.pop_back();
         }
@@ -93,6 +94,7 @@ class HookNotifier {
     ~HookNotifier() {
         if (!promises.empty()) {
             ERROR("promises still remain: %zu", promises.size());
+            ERROR("final trade_idx: %u, next hook expects: %u", idx, promises.back().trade_idx());
         }
     }
 };

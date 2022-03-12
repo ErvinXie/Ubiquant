@@ -332,7 +332,7 @@ Order OrderIterator::next() {
     while (start[now_cnt].price == -1) {
         now_cnt++;
     }
-    Order x = Order::from_raw(start[now_cnt].price / 100.0, start[now_cnt].get_volume(), start[now_cnt].get_type(),
+    Order x = Order::from_raw(start[now_cnt].price, start[now_cnt].get_volume(), start[now_cnt].get_type(),
                               start[now_cnt].get_direction());
     now_cnt++;
     return x;
