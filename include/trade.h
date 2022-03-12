@@ -42,6 +42,13 @@ struct Order {
         order.price = std::lround(price * 100);
         return order;
     }
+
+    bool operator==(const Order& another) const {
+        return dir == another.dir && type == another.type && (type == Limit ? price == another.price : true) &&
+               volume == another.volume;
+    }
+
+    bool operator!=(const Order& another) const { return !(*this == another); }
 };
 
 // 成交记录

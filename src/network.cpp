@@ -32,7 +32,7 @@ struct PacketHeader {
     uint32_t num_bits;
 };
 
-void read_exact(int fd, char* buf, size_t nbytes) {
+void read_exact(int fd, char *buf, size_t nbytes) {
     size_t bytes_read = 0;
     while (bytes_read < nbytes) {
         ssize_t ret = ::read(fd, buf + bytes_read, nbytes - bytes_read);
@@ -44,7 +44,7 @@ void read_exact(int fd, char* buf, size_t nbytes) {
     }
 }
 
-void write_exact(int fd, const char* buf, size_t nbytes) {
+void write_exact(int fd, const char *buf, size_t nbytes) {
     size_t bytes_written = 0;
     while (bytes_written < nbytes) {
         ssize_t ret = ::write(fd, buf + bytes_written, nbytes - bytes_written);
@@ -66,10 +66,10 @@ class Receiver {
     void run() {
         while (true) {
             PacketHeader header;
-            read_exact(*sockfd, (char*)&header, sizeof header);
+            read_exact(*sockfd, (char *)&header, sizeof header);
 
             std::vector<uint8_t> buffer((header.num_bits + 7) / 8);
-            read_exact(*sockfd, (char*)buffer.data(), buffer.size());
+            read_exact(*sockfd, (char *)buffer.data(), buffer.size());
 
             Packet packet{.shard = header.shard, .seq = header.seq, .num_bits = header.num_bits, .data = buffer};
             packet.check_well_formedness();
@@ -96,8 +96,8 @@ class Sender {
                 .num_bits = packet.num_bits,
             };
 
-            write_exact(*sockfd, (const char*)&header, sizeof header);
-            write_exact(*sockfd, (const char*)packet.data.data(), packet.data.size());
+            write_exact(*sockfd, (const char *)&header, sizeof header);
+            write_exact(*sockfd, (const char *)packet.data.data(), packet.data.size());
         }
     }
 };
@@ -117,60 +117,62 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
         .sin_family = AF_INET, .sin_port = htons(port), .sin_addr = {}
     };
     sa.sin_addr.s_addr = INADDR_ANY;
-    spawn_thread([=] {
+
+    char buf[128];
+    ::inet_ntop(AF_INET, (void *)&sa, buf, sizeof buf);
+    auto str_addr = std::string(buf) + ":" + std::to_string(port);
+
+    spawn_thread("network listener " + str_addr, [=] {
         int fd = ::socket(AF_INET, SOCK_STREAM, 0);
 
-        
         if (fd < 0) {
-            ERROR("socket: %s\n", strerror(errno));
+            ERROR("socket: %s", strerror(errno));
             throw "failed to create socket";
         }
 
         // Fd sockfd(fd);
         int opt = 1;
-        if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
-                       &opt, sizeof(opt)))
-        {
-            perror("setsockopt");
-            exit(EXIT_FAILURE);
+        if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+            ERROR("setsockopt: %s", strerror(errno));
+            throw "failed to reuse socket socket";
         }
 
-        if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof(sa)) < 0) {
-            ERROR("bind: %s\n", strerror(errno));
+        if (::bind(fd, reinterpret_cast<const struct sockaddr *>(&sa), sizeof(sa)) < 0) {
+            ERROR("bind: %s", strerror(errno));
             throw "failed to bind address to socket";
         }
 
         if (::listen(fd, BACKLOG_SIZE) < 0) {
-            ERROR("listen: %s\n", strerror(errno));
+            ERROR("listen: %s", strerror(errno));
             throw "failed to listen";
         }
-        DEBUG("listening on %d\n",port);
+        INFO("listening on %d", port);
 
         struct sockaddr_in client_address;
         socklen_t address_len = sizeof(client_address);
         while (true) {
             int new_socket = ::accept(fd, (struct sockaddr *)&client_address, &address_len);
             if (new_socket < 0) {
-                ERROR("accept: %s\n", strerror(errno));
+                ERROR("accept: %s", strerror(errno));
                 throw "failed to accept connection";
             }
             sockaddr_in *sin = reinterpret_cast<sockaddr_in *>(&client_address);
             char buf[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &(sin->sin_addr), buf, sizeof(buf));
-            DEBUG("listen connected from %s:%d\n", buf, ntohs( sin->sin_port));
+            ::inet_ntop(AF_INET, &(sin->sin_addr), buf, sizeof(buf));
+            INFO("listen connected from %s: %d", buf, ntohs(sin->sin_port));
             std::shared_ptr<Fd> share_new_socket = std::make_shared<Fd>(new_socket);
 
             // spawn receiver thread
-            spawn_thread([=]
-                         {
+            spawn_thread(std::string("network receiver"), [=] {
                 Receiver rx(share_new_socket, sink);
-                rx.run(); });
+                rx.run();
+            });
 
             // spawn sender thread
-            spawn_thread([=]
-                         {
+            spawn_thread(std::string("network sender"), [=] {
                 Sender tx(share_new_socket, stream);
-                tx.run(); });
+                tx.run();
+            });
         }
     });
 }
@@ -183,44 +185,45 @@ void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_add
     struct sockaddr_in self_sa {
         .sin_family = AF_INET, .sin_port = htons(self_port), .sin_addr = self_addr
     };
-    spawn_thread([=] {
+    char buf[128];
+    ::inet_ntop(AF_INET, (void *)&sa, buf, sizeof buf);
+    auto str_addr = std::string(buf) + ":" + std::to_string(port);
+    spawn_thread("network connector " + str_addr, [=] {
         int sockfd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            ERROR("socket: %s\n", strerror(errno));
+            ERROR("socket: %s", strerror(errno));
             throw "failed to create socket";
         }
 
         int opt = 1;
-        if (::setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
-                         &opt, sizeof(opt)))
-        {
+        if (::setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
             perror("setsockopt");
             exit(EXIT_FAILURE);
         }
 
-        if (::bind(sockfd, reinterpret_cast<const sockaddr*>(&self_sa), sizeof(self_sa)) == 0) {
-            INFO("bind success to port %d\n",self_port);
-        }else{
-            WARN("bind failure\n");
+        if (::bind(sockfd, reinterpret_cast<const sockaddr *>(&self_sa), sizeof(self_sa)) == 0) {
+            INFO("bind success to port %d", self_port);
+        } else {
+            WARN("bind failure");
         }
 
         std::shared_ptr<Fd> fd = std::make_shared<Fd>(sockfd);
 
-        while (::connect(sockfd, reinterpret_cast<const struct sockaddr*>(&sa), sizeof sa) < 0) {
+        while (::connect(sockfd, reinterpret_cast<const struct sockaddr *>(&sa), sizeof sa) < 0) {
             using namespace std::chrono_literals;
-            WARN("connect: %s\n", strerror(errno));
-            INFO("attempt to retry connection\n");
+            WARN("connect: %s", strerror(errno));
+            INFO("attempt to retry connection");
             std::this_thread::sleep_for(1000ms);
         }
-        DEBUG("connected connected\n");
+        INFO("connected to %s", str_addr.c_str());
         // spawn receiver thread
-        spawn_thread([=] {
+        spawn_thread(std::string("network receiver"), [=] {
             Receiver rx(fd, sink);
             rx.run();
         });
 
         // spawn sender thread
-        spawn_thread([=] {
+        spawn_thread(std::string("network sender"), [=] {
             Sender tx(fd, stream);
             tx.run();
         });

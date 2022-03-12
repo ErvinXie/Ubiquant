@@ -29,40 +29,38 @@ class Demux final : public Sink<Packet> {
 };
 
 void process_stock(uint32_t stk_id, std::shared_ptr<PacketQueue> rx_from_remote,
-                   std::shared_ptr<PacketQueue> tx_to_remote, HookChecker checker, HookNotifier notifier, Config conf,
-                   raw_order *raw_orders, double prev_close) {
+                   std::shared_ptr<PacketQueue> tx_to_remote, HookChecker &checker, HookNotifier &notifier, Config conf,
+                   raw_order *raw_orders, uint32_t prev_close) {
     std::vector<bool> bitmask(NR_ORDERS_SINGLE_STK_HALF * 2);
 
-    OrderIterator *iter = new OrderIterator(raw_orders);
-
+    OrderIterator iter(raw_orders);
 
     for (size_t i = 0; i < NR_ORDERS_SINGLE_STK_HALF; i++) {
-        bitmask[iter->next_order_id()] = true;
+        bitmask[iter.next_order_id()] = true;
     }
-    
-    iter->now_cnt = 1;
+
+    iter.now_cnt = 1;
 
     auto self_queue = std::make_shared<PacketQueue>();
     OrderEncoder encoder(stk_id, std::make_shared<Tee<Packet>>(tx_to_remote, self_queue));
-    DEBUG("Sending Stock %d\n", stk_id);
+    DEBUG("encoding stock %u", stk_id);
 
     for (size_t i = 0; i < NR_ORDERS_SINGLE_STK_HALF; i++) {
-        encoder.send(iter->next());
+        encoder.send(iter.next());
     }
-    DEBUG("Stock %d iter now cnt %d\n", stk_id, iter->now_cnt);
-    delete iter;
+    encoder.flush();
 
     OrderMerger order_stream(OrderDecoder(stk_id, self_queue), OrderDecoder(stk_id, rx_from_remote),
                              std::move(bitmask));
     std::string output_file("/data/team-4/trade");
     output_file += std::to_string(stk_id + 1);
-    Processor processor(std::move(checker), std::move(notifier), Persister(output_file.c_str(), stk_id),
-                        std::lround(prev_close));
-    DEBUG("Processing Stock %d\n", stk_id);
+    Processor processor(stk_id, std::move(checker), std::move(notifier), Persister(output_file.c_str(), stk_id),
+                        prev_close);
+    DEBUG("Processing Stock %u", stk_id);
     while (auto order = order_stream.next()) {
-        DEBUG("std %d, get %d\n",stk_id,order.value().volume);
         processor.process(order.value());
     }
+    INFO("stock %u finished", stk_id);
 }
 
 int main(int argc, char *argv[]) {
@@ -87,15 +85,17 @@ int main(int argc, char *argv[]) {
     raw_order *raw_orders[11] = {};
     read_all(conf.data_path.data(), std::to_string(conf.id + 1).data(), NR_ORDERS_SINGLE_STK_HALF * 2, raw_orders);
 
-    int *prev_close = read_prev_close(conf.data_path.c_str(), std::to_string(conf.id + 1).c_str());
+    auto prev_close = read_prev_close(conf.data_path.c_str(), std::to_string(conf.id + 1).c_str());
     auto hooks = prepare_hooks(read_hooks(conf.hook_path().c_str()));
 
-    for (size_t i = 0; i < 10; i++) {
-        spawn_thread(process_stock, i, demux->get_queue(i), tx_to_remote, std::move(hooks[i].first),
-                     std::move(hooks[i].second), conf, raw_orders[i + 1], prev_close[i + 1] / 100.0);
+    for (size_t i = 0; i < NR_STOCKS; i++) {
+        spawn_thread("exchanger " + std::to_string(i),
+                     [=, port = demux->get_queue(i), prev = prev_close[i], checker = std::move(hooks[i].first),
+                      notifier = std::move(hooks[i].second)]() mutable {
+                         process_stock(i, port, tx_to_remote, checker, notifier, conf, raw_orders[i + 1], prev);
+                     });
     }
-    delete prev_close;
 
     cui(conf);
-    // event loop
+    // event loopz
 }

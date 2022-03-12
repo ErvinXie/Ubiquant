@@ -5,6 +5,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include <cassert>
 
 #include "common.h"
@@ -32,6 +36,7 @@ Persister::Persister(const char *path, int stk_id, int max_trade_count)
 }
 
 void Persister::persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume) {
+    assert(now_cnt < max_trade_cnt);
     tp[now_cnt++] = Trade{
         .stk_code = stk_id,
         .bid_id = (int)bid_id,
@@ -42,6 +47,7 @@ void Persister::persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32
 }
 
 Persister::~Persister() {
+    if (tp == nullptr) return;
     ::munmap((void *)tp, max_trade_cnt * sizeof(Trade));
     if (::ftruncate(fd, now_cnt * sizeof(Trade)) < 0) {
         ERROR("ftruncate: %s", strerror(errno));

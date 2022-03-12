@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "H5Cpp.h"
 
@@ -17,7 +18,7 @@ using namespace H5;
 
 template <typename T>
 void read_one_data(const char *path_100x1000x1000, const char *trader, const char *what, raw_order *raw_orders[],
-                   int max_order, int *order_id_p) {
+                   int max_order, std::vector<int> &order_id_p) {
     std::string swhat(what), spath(path_100x1000x1000), strader(trader);
     fs::path dir(spath);
     fs::path fname(swhat + strader + ".h5");
@@ -124,18 +125,16 @@ void read_one_data(const char *path_100x1000x1000, const char *trader, const cha
     }
 }
 
-int *read_order_id(const char *path_100x1000x1000, const char *trader, int max_order) {
+std::vector<int> read_order_id(const char *path_100x1000x1000, const char *trader, int max_order) {
     std::string swhat("order_id"), spath(path_100x1000x1000), strader(trader);
     fs::path dir(spath);
     fs::path fname(swhat + strader + ".h5");
     fs::path full_path = dir / fname;
-    std::cout << full_path << std::endl;
 
     const H5std_string FILE_NAME(full_path.c_str());
     const H5std_string DATASET_NAME(swhat.c_str());
 
-    int *data_read = new int[10 * max_order];
-    memset(data_read, 0, sizeof(int) * 10 * max_order);
+    std::vector<int> data_read(10 * max_order);
     printf("Order ID Size: %lf GB\n", sizeof(int) * 10 * max_order / 1e9);
 
     H5File file(FILE_NAME, H5F_ACC_RDONLY);
@@ -185,12 +184,12 @@ int *read_order_id(const char *path_100x1000x1000, const char *trader, int max_o
     count_out[2] = NZ_SUB;
     memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
 
-    dataset.read(data_read, PredType::NATIVE_INT, memspace, dataspace);
+    dataset.read(data_read.data(), PredType::NATIVE_INT, memspace, dataspace);
 
     return data_read;
 }
 
-int *read_prev_close(const char *path_100x1000x1000, const char *trader) {
+std::vector<uint32_t> read_prev_close(const char *path_100x1000x1000, const char *trader) {
     std::string swhat("price"), spath(path_100x1000x1000), strader(trader);
     fs::path dir(spath);
     fs::path fname(swhat + strader + ".h5");
@@ -239,15 +238,11 @@ int *read_prev_close(const char *path_100x1000x1000, const char *trader) {
 
     dataset.read(data_read, PredType::NATIVE_DOUBLE, memspace, dataspace);
 
-    int *re = new int[11];
+    std::vector<uint32_t> ret;
     for (size_t i = 0; i < NX_SUB; i++) {
-        re[i + 1] = static_cast<int>(data_read[i] * 100);
-        // printf("%lf\n", data_read[i]);
+        ret.push_back(std::lround(data_read[i] * 100));
     }
-
-    delete[] data_read;
-
-    return re;
+    return ret;
 }
 
 int *read_hook(const char *path) {
@@ -313,7 +308,7 @@ void read_all(const char *path_100x1000x1000, const char *trader, int single_stk
     }
 
     printf("reading order\n");
-    int *oid = read_order_id(path_100x1000x1000, trader, single_stk_order_size);
+    auto oid = read_order_id(path_100x1000x1000, trader, single_stk_order_size);
 
     for (auto what : whats) {
         printf("\nreading %s\n", what);
@@ -323,17 +318,13 @@ void read_all(const char *path_100x1000x1000, const char *trader, int single_stk
             read_one_data<int>(path_100x1000x1000, trader, what, raw_orders, single_stk_order_size, oid);
         }
     }
-    delete[] oid;
+
     for (size_t i = 1; i <= 10; i++) {
         printf("stock:%d\n", i);
         for (size_t j = 1; j <= 10; j++) {
             printf("order_id:%d ", j);
             raw_orders[i][j].debug();
         }
-        // for (size_t j = single_stk_order_size - 10; j < single_stk_order_size; j++)
-        // {
-        //     raw_orders[i][j].debug();
-        // }
     }
 }
 

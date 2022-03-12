@@ -11,7 +11,6 @@
 
 #include "network.h"
 
-using std::shared_ptr;
 using std::uint32_t;
 using std::uint8_t;
 
@@ -39,7 +38,7 @@ class OBitStream {
 
     void put_bits(int num, uint32_t bits) {
         for (int i = 0; i < num; i++) {
-            put_bit(bits & (1 << num));
+            put_bit(bits & (1 << i));
         }
     }
 
@@ -48,7 +47,7 @@ class OBitStream {
             return;
         }
         buf.resize((cursor + 7) / 8);
-        sink->send(Packet{.shard = shard, .seq = seq++, .num_bits = cursor, .data = move(buf)});
+        sink->send(Packet{.shard = shard, .seq = seq++, .num_bits = cursor, .data = std::move(buf)});
         cursor = 0;
         buf = std::vector<uint8_t>((max_num_bits + 7) / 8);
     }
@@ -57,9 +56,9 @@ class OBitStream {
 class IBitStream {
     std::vector<uint8_t> buf;
     uint32_t shard;
-    uint32_t seq;
-    uint32_t num_bits;
-    uint32_t cursor;
+    uint32_t seq = 0;
+    uint32_t num_bits = 0;
+    uint32_t cursor = 0;
     std::map<uint32_t, Packet> packets;
     std::shared_ptr<Stream<Packet>> stream;
 

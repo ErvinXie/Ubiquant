@@ -33,7 +33,7 @@ void Processor::process(Order order) {
 
 void Processor::process_limit(Order::Direction dir, uint32_t order_id, uint32_t price, uint32_t volume) {
     if (price < min_price || price > max_price) {
-        // invalid order
+        DEBUG("invalid order: < min_price or > max_price");
         return;
     }
     ComOrder tmp;
@@ -89,55 +89,19 @@ void Processor::process_limit(Order::Direction dir, uint32_t order_id, uint32_t 
 void Processor::process_counter_best(Order::Direction dir, uint32_t order_id, uint32_t volume) {
     ComOrder tmp;
     if (dir == Order::Direction::Bid) {
-        if (sell.empty()) return;
-        uint32_t price = sell.top().price;
-        while (!sell.empty() && volume && sell.top().price == price) {
-            tmp = sell.top();
-            sell.pop();
-            if (tmp.volume < volume) {
-                commit(order_id, tmp.order_id, tmp.price, tmp.volume);
-                sell_total -= tmp.volume;
-                volume -= tmp.volume;
-            } else {
-                commit(order_id, tmp.order_id, tmp.price, volume);
-                sell_total -= volume;
-                if (tmp.volume > volume) {
-                    tmp.volume -= volume;
-                    sell.push(tmp);
-                }
-                volume = 0;
-                break;
-            }
+        if (sell.empty()) {
+            DEBUG("invalid order: counter empty");
+        } else {
+            process_limit(dir, order_id, sell.top().price, volume);
         }
-        if (volume) {
-            buy.push(ComOrder(order_id, price, volume));
-            buy_total += volume;
+    } else if (dir == Order::Direction::Ask) {
+        if (buy.empty()) {
+            DEBUG("invalid order: counter empty");
+        } else {
+            process_limit(dir, order_id, buy.top().price, volume);
         }
     } else {
-        if (buy.empty()) return;
-        uint32_t price = buy.top().price;
-        while (!buy.empty() && volume && buy.top().price == price) {
-            tmp = buy.top();
-            buy.pop();
-            if (tmp.volume < volume) {
-                commit(tmp.order_id, order_id, tmp.price, tmp.volume);
-                buy_total -= tmp.volume;
-                volume -= tmp.volume;
-            } else {
-                commit(tmp.order_id, order_id, tmp.price, volume);
-                buy_total -= volume;
-                if (tmp.volume > volume) {
-                    tmp.volume -= volume;
-                    buy.push(tmp);
-                }
-                volume = 0;
-                break;
-            }
-        }
-        if (volume) {
-            sell.push(ComOrder(order_id, price, volume));
-            sell_total += volume;
-        }
+        assert(!"unreachable");
     }
 }
 
@@ -146,7 +110,7 @@ void Processor::process_client_best(Order::Direction dir, uint32_t order_id, uin
         if (buy.empty()) return;
         buy.push(ComOrder(order_id, buy.top().price, volume));
         buy_total += volume;
-    } else {
+    } else if (dir == Order::Direction::Ask) {
         if (sell.empty()) return;
         sell.push(ComOrder(order_id, sell.top().price, volume));
         sell_total += volume;
@@ -160,7 +124,7 @@ void Processor::process_best_five(Order::Direction dir, uint32_t order_id, uint3
         while (!sell.empty() && volume) {
             if (sell.top().price != last_price) {
                 price_count++;
-                if (price_count == 6) break;
+                if (price_count > 5) break;
                 last_price = sell.top().price;
             }
             tmp = sell.top();
@@ -184,7 +148,7 @@ void Processor::process_best_five(Order::Direction dir, uint32_t order_id, uint3
         while (!buy.empty() && volume) {
             if (buy.top().price != last_price) {
                 price_count++;
-                if (price_count == 6) break;
+                if (price_count > 5) break;
                 last_price = buy.top().price;
             }
             tmp = buy.top();

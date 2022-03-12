@@ -20,7 +20,11 @@ class Future {
     std::future<bool> future;
 
    public:
-    Future(uint32_t order_id, std::future<bool> future) : _M_order_id(order_id), future(std::move(future)) {}
+    Future(uint32_t order_id, std::future<bool>&& future) : _M_order_id(order_id), future(std::move(future)) {}
+
+    Future(Future&&) = default;
+
+    Future& operator=(Future&&) = default;
 
     uint32_t order_id() const { return _M_order_id; }
 
@@ -33,8 +37,12 @@ class Promise {
     std::promise<bool> promise;
 
    public:
-    Promise(uint32_t trade_idx, uint32_t threshold, std::promise<bool> promise)
+    Promise(uint32_t trade_idx, uint32_t threshold, std::promise<bool>&& promise)
         : _M_trade_idx(trade_idx), threshold(threshold), promise(std::move(promise)) {}
+
+    Promise(Promise&&) = default;
+
+    Promise& operator=(Promise&&) = default;
 
     uint32_t trade_idx() const { return _M_trade_idx; }
 
@@ -45,7 +53,7 @@ class HookChecker {
     std::vector<Future> futures;
 
    public:
-    HookChecker(std::vector<Future> futures) : futures(std::move(futures)) {
+    HookChecker(std::vector<Future>&& futures) : futures(std::move(futures)) {
         std::sort(futures.begin(), futures.end(),
                   [](const Future& first, const Future& second) { return first.order_id() > second.order_id(); });
     }
@@ -66,15 +74,25 @@ class HookNotifier {
     std::vector<Promise> promises;
 
    public:
-    HookNotifier(std::vector<Promise> promises) : promises(std::move(promises)) {
+    HookNotifier(std::vector<Promise>&& promises) : promises(std::move(promises)) {
         std::sort(promises.begin(), promises.end(),
                   [](const Promise& first, const Promise& second) { return first.trade_idx() > second.trade_idx(); });
     }
+
+    HookNotifier(HookNotifier&&) = default;
+
+    HookNotifier& operator=(HookNotifier&&) = default;
 
     void notify(uint32_t volume) {
         if (!promises.empty() && promises.back().trade_idx() == idx++) {
             promises.back().resolve(volume);
             promises.pop_back();
+        }
+    }
+
+    ~HookNotifier() {
+        if (!promises.empty()) {
+            ERROR("promises still remain: %zu", promises.size());
         }
     }
 };

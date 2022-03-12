@@ -1,8 +1,13 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <sys/socket.h>
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include <arpa/inet.h>
+#include <sys/socket.h>
+
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
@@ -59,6 +64,11 @@ class PacketQueue final : public Sink<Packet>, public Stream<Packet> {
         queue.pop();
         return packet;
     }
+
+    size_t size() {
+        std::unique_lock lk(mtx);
+        return queue.size();
+    }
 };
 
 std::optional<struct in_addr> parse_address(std::string address);
@@ -66,7 +76,7 @@ std::optional<struct in_addr> parse_address(std::string address);
 void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
                     std::shared_ptr<Sink<Packet>> sink);
 
-void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port, std::shared_ptr<PacketQueue> stream,
-                     std::shared_ptr<Sink<Packet>> sink);
+void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port,
+                     std::shared_ptr<PacketQueue> stream, std::shared_ptr<Sink<Packet>> sink);
 
 #endif
