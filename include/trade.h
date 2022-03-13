@@ -40,7 +40,11 @@ struct Order {
             order.dir = Ask;
         }
         order.volume = volume;
-        order.price = price;
+        if (type == 0) {
+            order.price = price;
+        } else {
+            order.price = 0;
+        }
         return order;
     }
 

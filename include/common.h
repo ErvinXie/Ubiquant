@@ -19,15 +19,28 @@ using std::size_t;
 using std::uint32_t;
 
 #ifndef DEBUG_LEVEL
-#define DEBUG_LEVEL 4
+#define DEBUG_LEVEL 3
 #endif
 
+#ifndef TERMINAL_COLOR
+#define TERMINAL_COLOR 1
+#endif
+
+#if TERMINAL_COLOR
 #define TERMINAL_SET_RED "\u001b[31m"
 #define TERMINAL_SET_YELLOW "\u001b[33m"
 #define TERMINAL_SET_GREEN "\u001b[32m"
 #define TERMINAL_SET_BLUE "\u001b[34m"
 #define TERMINAL_SET_MAGENTA "\u001b[35m"
 #define TERMINAL_RESET "\u001b[0m"
+#else
+#define TERMINAL_SET_RED
+#define TERMINAL_SET_YELLOW
+#define TERMINAL_SET_GREEN
+#define TERMINAL_SET_BLUE
+#define TERMINAL_SET_MAGENTA
+#define TERMINAL_RESET
+#endif
 
 #if DEBUG_LEVEL > 0
 #define ERROR(fmt, ...)                                                                                            \
@@ -59,6 +72,14 @@ using std::uint32_t;
                  __func__, ##__VA_ARGS__)
 #else
 #define DEBUG(...)
+#endif
+
+#if DEBUG_LEVEL > 4
+#define TRACE(fmt, ...)                                                                                              \
+    std::fprintf(stderr, "[" TERMINAL_SET_GREEN "TRACE" TERMINAL_RESET "] %s:%d\t%s: " fmt "\n", __FILE__, __LINE__, \
+                 __func__, ##__VA_ARGS__)
+#else
+#define TRACE(...)
 #endif
 
 struct nocopy {
@@ -118,8 +139,8 @@ struct Tee final : Sink<T> {
 constexpr size_t NR_STOCKS = 10;
 
 constexpr size_t ORDER_DX = 500;
-constexpr size_t ORDER_DY = 10;
-constexpr size_t ORDER_DZ = 10;
+constexpr size_t ORDER_DY = 1000;
+constexpr size_t ORDER_DZ = 1000;
 constexpr size_t NR_ORDERS_SINGLE_STK_HALF = ORDER_DX * ORDER_DY * ORDER_DZ / NR_STOCKS;
 
 constexpr size_t READ_SLICE_SIZE = 50;

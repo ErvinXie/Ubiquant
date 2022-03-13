@@ -29,7 +29,8 @@ class OrderMerger final : Stream<Order> {
 
 // 单支股票的撮合器
 class Processor {
-    uint32_t order_id;
+    uint32_t stk_id;
+    uint32_t order_id = 0;
     HookChecker checker;
     HookNotifier notifier;
     Persister persister;
@@ -68,8 +69,8 @@ class Processor {
     void commit(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume);
 
    public:
-    Processor(uint32_t order_id, HookChecker checker, HookNotifier notifier, Persister persister, uint32_t last_price)
-        : order_id(order_id),
+    Processor(uint32_t stk_id, HookChecker checker, HookNotifier notifier, Persister persister, uint32_t last_price)
+        : stk_id(stk_id),
           checker(std::move(checker)),
           notifier(std::move(notifier)),
           persister(std::move(persister)),

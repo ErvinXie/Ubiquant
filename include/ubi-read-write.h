@@ -82,7 +82,7 @@ struct OrderIterator {
 
     OrderIterator() = delete;
     OrderIterator(raw_order *start) : start(start) {}
-    ~OrderIterator() { delete[] start; }
+    ~OrderIterator() {  }
 
     Order next();
     size_t next_order_id();
