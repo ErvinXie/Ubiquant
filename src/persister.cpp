@@ -36,9 +36,9 @@ Persister::Persister(const char *path, int stk_id, int max_trade_count)
 }
 
 void Persister::persist(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume) {
-    assert(now_cnt < max_trade_cnt);
+    assert(now_cnt < (size_t)max_trade_cnt);
     tp[now_cnt++] = Trade{
-        .stk_code = stk_id + 1,
+        .stk_code = stk_id,
         .bid_id = (int)bid_id,
         .ask_id = (int)ask_id,
         .price = (double)price / 100.0,

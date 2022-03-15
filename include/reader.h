@@ -4,21 +4,20 @@
 #include <vector>
 
 #include "common.h"
-#include "config.h"
 #include "hook.h"
+#include "trade.h"
 
-struct OrderList {
-    double last_close;
-    size_t length;
-    std::vector<int> order_id;
+struct RawData {
+    std::vector<uint32_t> prev_close;
+    std::vector<std::vector<int>> order_id_pos;
+    std::vector<int8_t> direction;
+    std::vector<int8_t> type;
     std::vector<double> price;
     std::vector<int> volume;
-    std::vector<int> type;
-    std::vector<int> direction;
 };
 
-std::vector<Hook> read_hooks(const char* path);
+std::shared_ptr<RawData> read_all(const char *path_100x1000x1000, const char *trader);
 
-OrderList read_orders(Config& conf, uint32_t stk_id);
+std::vector<Hook> read_hooks(const char *path);
 
 #endif

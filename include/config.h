@@ -1,42 +1,40 @@
 #ifndef CONFIG_H
 #define CONFIG_H
+#include <atomic>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
-#include <mutex>
 #include <string>
 #include <vector>
 
 #include "common.h"
 
 struct Measure {
-    std::mutex mtx;
-    int stk_id;
-    int order_into_trader;
-    int trade_outfrom_trader;
-    int order_on_board;
+    size_t stk_id;
+    std::atomic<size_t> order_processed{};
+    std::atomic<size_t> trade_committed{};
+    std::atomic<size_t> order_in_book{};
 
     void info() {
-        std::unique_lock lk(mtx);
-        printf("stk:%d, orders(received:%d,on_board:%d) trade(out:%d)\n", stk_id + 1, order_into_trader, order_on_board,
-               trade_outfrom_trader);
+        printf("stock %zu: %zu orders_processed, %zu orders in book, %zu trades committed\n", stk_id + 1,
+               order_processed.load(), order_in_book.load(), trade_committed.load());
     }
 
-    void increment_order_into_trader() {
-        std::unique_lock lk(mtx);
-        order_into_trader++;
-    }
+    void increment_order_processed() { order_processed.store(order_processed + 1, std::memory_order_release); }
 
-    void increment_trade_outfrom_trader() {
-        std::unique_lock lk(mtx);
-        trade_outfrom_trader++;
-    }
+    void increment_trade_commited() { trade_committed.store(trade_committed + 1, std::memory_order_release); }
 
-    explicit Measure(int stk_id) : stk_id(stk_id) {
-        order_into_trader = 0;
-        trade_outfrom_trader = 0;
-        order_on_board = 0;
-    };
+    void set_order_in_book(size_t num) { order_in_book.store(num, std::memory_order_release); }
+};
+
+struct Metrics : std::vector<Measure> {
+    explicit Metrics(size_t nr_stocks) : std::vector<Measure>(nr_stocks) {
+        for (size_t i = 0; i < nr_stocks; i++) {
+            at(i).stk_id = i;
+        }
+    }
 };
 
 struct Config {
@@ -95,12 +93,12 @@ struct Config {
     inline void info() {
         printf("id : %d\n", id);
         for (size_t i = 0; i < 4; i++) {
-            printf("server %d ip %s\n", i, ip[i].c_str());
+            printf("server %zu ip %s\n", i, ip[i].c_str());
         }
         for (size_t i = 0; i < 4; i++) {
             for (size_t j = 0; j < 4; j++) {
                 if (has_connection[i][j]) {
-                    printf("server %d to sever %d at port: ", i, j);
+                    printf("server %zu to sever %zu at port: ", i, j);
                     for (size_t k = 0; k < 3; k++) {
                         printf("%d ", open_ports[i][j][k]);
                     }
@@ -119,11 +117,10 @@ struct Config {
 };
 
 std::vector<std::string> split(std::string s, char c);
-void change_port(int previous, int now);
-void cmd(std::string x, Config &conf);
-void cui(Config &conf);
+void cui(Config &conf, std::function<void(int, int, int)> change_port_with);
 void maintain(int argc, char *argv[]);
 
-extern Measure metrics[NR_STOCKS];
+extern Metrics metrics;
+extern const std::time_t start_time;
 
 #endif

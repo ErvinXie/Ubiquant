@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#include <atomic>
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
@@ -26,7 +27,10 @@ using std::uint16_t;
 using std::uint32_t;
 using std::uint8_t;
 
-constexpr size_t CHUNK_SIZE = 64 * 1024;
+const std::uint64_t NETWORK_KEY = 0x6b6da5cff59af717;
+constexpr size_t CHUNK_SIZE = 255 * 1024;
+
+extern std::atomic<size_t> network_bytes_tx, network_bytes_rx;
 
 struct Packet {
     uint32_t shard;
@@ -43,9 +47,9 @@ struct Packet {
 };
 
 class PacketQueue final : public Sink<Packet>, public Stream<Packet> {
-    std::condition_variable cv;
-    std::mutex mtx;
-    std::priority_queue<Packet> queue;
+    std::condition_variable cv{};
+    std::mutex mtx{};
+    std::priority_queue<Packet> queue{};
 
    public:
     virtual void send(Packet packet) override {

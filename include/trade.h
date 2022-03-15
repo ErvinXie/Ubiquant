@@ -7,16 +7,17 @@
 
 #include "common.h"
 
+using std::int8_t;
 using std::uint32_t;
 
 // 订单
 struct Order {
-    enum Direction {
-        Bid = 0,  // 买入
-        Ask = 1,  // 卖出
+    enum Direction : std::int8_t {
+        Bid = 1,   // 买入
+        Ask = -1,  // 卖出
     };
 
-    enum OrderType {
+    enum OrderType : std::int8_t {
         Limit = 0,        // 限价申报
         CounterBest = 1,  // 对手方最优
         ClientBest = 2,   // 本方最优
@@ -29,24 +30,6 @@ struct Order {
     OrderType type;
     uint32_t price;  // 仅限价单有意义
     uint32_t volume;
-
-    static Order from_raw(uint32_t price, int volume, int type, int direction) {
-        Order order;
-        assert(0 <= type && type < 6);
-        order.type = (OrderType)type;
-        if (direction == 1) {
-            order.dir = Bid;
-        } else {
-            order.dir = Ask;
-        }
-        order.volume = volume;
-        if (type == 0) {
-            order.price = price;
-        } else {
-            order.price = 0;
-        }
-        return order;
-    }
 
     bool operator==(const Order& another) const {
         return dir == another.dir && type == another.type && (type == Limit ? price == another.price : true) &&

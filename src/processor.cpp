@@ -33,6 +33,8 @@ void Processor::process(Order order) {
         default:
             assert(!"unrecognized order type");
     }
+    metrics.at(stk_id).increment_order_processed();
+    metrics.at(stk_id).set_order_in_book(buy.size() + sell.size());
 }
 
 void Processor::process_limit(Order::Direction dir, uint32_t order_id, uint32_t price, uint32_t volume) {
@@ -249,7 +251,7 @@ void Processor::process_fok(Order::Direction dir, uint32_t order_id, uint32_t vo
 void Processor::commit(uint32_t bid_id, uint32_t ask_id, uint32_t price, uint32_t volume) {
     TRACE("%d trade %d,%d,%d,%d", stk_id, bid_id, ask_id, price, volume);
     assert(volume > 0);
-    metrics[stk_id].increment_trade_outfrom_trader();
     notifier.notify(volume);
     persister.persist(bid_id, ask_id, price, volume);
+    metrics.at(stk_id).increment_trade_commited();
 }

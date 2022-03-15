@@ -88,20 +88,24 @@ struct nocopy {
     nocopy &operator=(const nocopy &) = delete;
 };
 
-template <class Function>
-void spawn_thread(std::string name, Function f) {
-    std::thread([f = std::move(f), name = std::move(name)]() mutable {
-        try {
-            f();
-            INFO("thread '%s' exited normally", name.c_str());
-        } catch (const char *str) {
-            ERROR("thread '%s' error caught: %s, exited", name.c_str(), str);
-        } catch (std::exception &e) {
-            ERROR("thread '%s' exception caught: %s, exited", name.c_str(), e.what());
-        } catch (...) {
-            ERROR("thread '%s' unidentified exception, exited", name.c_str());
-        }
-    }).detach();
+template <class Function, class... Args>
+inline void thread_guard(std::string name, Function &&f, Args &&...args) {
+    try {
+        f(std::forward<Args>(args)...);
+        INFO("thread '%s' exited normally", name.c_str());
+    } catch (const char *str) {
+        ERROR("thread '%s' error caught: %s, exited", name.c_str(), str);
+    } catch (std::exception &e) {
+        ERROR("thread '%s' exception caught: %s, exited", name.c_str(), e.what());
+    } catch (...) {
+        ERROR("thread '%s' unidentified exception, exited", name.c_str());
+    }
+}
+
+template <class Function, class... Args>
+[[nodiscard]] inline std::thread create_thread(std::string name, Function &&f, Args &&...args) {
+    return std::thread(thread_guard<std::decay_t<Function>, std::decay_t<Args>...>, std::move(name),
+                       std::forward<Function>(f), std::forward<Args>(args)...);
 }
 
 template <typename T>
@@ -143,7 +147,7 @@ constexpr size_t ORDER_DY = 1000;
 constexpr size_t ORDER_DZ = 1000;
 constexpr size_t NR_ORDERS_SINGLE_STK_HALF = ORDER_DX * ORDER_DY * ORDER_DZ / NR_STOCKS;
 
-constexpr size_t READ_SLICE_SIZE = 50;
+constexpr size_t READ_SLICE_SIZE = 100;
 
 constexpr size_t HOOK_DX = 10;
 constexpr size_t HOOK_DY = 100;

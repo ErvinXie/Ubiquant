@@ -9,20 +9,20 @@
 // 合并器
 class OrderMerger final : Stream<Order> {
     OrderDecoder local, remote;
-    std::vector<bool> bitmask;
+    std::vector<int> mask;
     uint32_t current = 0;
 
    public:
-    OrderMerger(OrderDecoder local, OrderDecoder remote, std::vector<bool> bitmask)
-        : local(local), remote(remote), bitmask(std::move(bitmask)) {}
+    OrderMerger(OrderDecoder local, OrderDecoder remote, std::vector<int> mask)
+        : local(std::move(local)), remote(std::move(remote)), mask(std::move(mask)) {}
     virtual std::optional<Order> next() override {
-        if (current >= bitmask.size()) {
+        if (current >= mask.size()) {
             return {};
         }
-        if (bitmask[current++]) {
-            return local.next();
-        } else {
+        if (mask[current++] == -1) {
             return remote.next();
+        } else {
+            return local.next();
         }
     }
 };

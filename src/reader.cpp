@@ -1,8 +1,15 @@
 #include "reader.h"
 
-#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include "H5Cpp.h"
+
+using std::int8_t;
 
 std::vector<Hook> read_hooks(const char *path) {
     using namespace H5;
@@ -51,83 +58,170 @@ std::vector<Hook> read_hooks(const char *path) {
 }
 
 template <typename T>
-static std::vector<T> read_column(const char *path, const char *what, uint32_t stk_code) {
+static std::vector<T> read_one(const char *path_100x1000x1000, const char *trader, const char *what) {
     using namespace H5;
 
-    const H5std_string file_name(path);
+    std::string swhat(what), spath(path_100x1000x1000), strader(trader);
+    std::filesystem::path dir(spath);
+    std::filesystem::path fname(swhat + strader + ".h5");
+    std::filesystem::path full_path = dir / fname;
 
-    H5File file(file_name, H5F_ACC_RDONLY);
-    DataSet dataset = file.openDataSet(H5std_string(what));
+    const H5std_string FILE_NAME(full_path.c_str());
+    const H5std_string DATASET_NAME(swhat.c_str());
+
+    std::vector<T> data_read(ORDER_DX * ORDER_DY * ORDER_DZ);
+    INFO("reading %s, data size: %lf GB", what, sizeof(T) * data_read.size() / 1e9);
+
+    H5File file(FILE_NAME, H5F_ACC_RDONLY);
+    DataSet dataset = file.openDataSet(DATASET_NAME);
 
     DataSpace dataspace = dataset.getSpace();
     int rank = dataspace.getSimpleExtentNdims();
-    assert(rank == 3);
 
     hsize_t dims_out[3];
     dataspace.getSimpleExtentDims(dims_out, NULL);
 
-    assert(dims_out[0] == ORDER_DX);
-    assert(dims_out[1] == ORDER_DY);
-    assert(dims_out[2] == ORDER_DZ);
+    INFO("rank %d, shape (%llu, %llu, %llu)", rank, dims_out[0], dims_out[1], dims_out[2]);
 
-    size_t total_size = ORDER_DX / NR_STOCKS * ORDER_DY * ORDER_DZ;
-    std::vector<T> data_read(total_size);
+    const int RANK_OUT = 3;
 
-    for (size_t x = stk_code; x < ORDER_DX; x += NR_STOCKS) {
-        DEBUG("stk %d %s sqaure %d\n", stk_code, what, x);
-        hsize_t offset[] = {x, 0, 0};
-        hsize_t count[] = {1, ORDER_DY, ORDER_DZ};
-        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+    size_t NX_SUB = dims_out[0];
+    size_t NY_SUB = dims_out[1];
+    size_t NZ_SUB = dims_out[2];
 
-        hsize_t out_offset[] = {x / NR_STOCKS, 0, 0};
-        hsize_t out_count[] = {1, ORDER_DY, ORDER_DZ};
-        hsize_t mem_count[] = {ORDER_DX / NR_STOCKS, ORDER_DY, ORDER_DZ};
-        DataSpace memspace(3, mem_count);
-        memspace.selectHyperslab(H5S_SELECT_SET, out_count, out_offset);
+    assert(NX_SUB == ORDER_DX);
+    assert(NY_SUB == ORDER_DY);
+    assert(NZ_SUB == ORDER_DZ);
 
-        static_assert(std::is_same_v<T, int> || std::is_same_v<T, double>, "invalid data type");
-        if constexpr (std::is_same_v<T, int>) {
-            dataset.read(data_read.data(), PredType::NATIVE_INT, memspace, dataspace);
-        } else if constexpr (std::is_same_v<T, double>) {
-            dataset.read(data_read.data(), PredType::NATIVE_DOUBLE, memspace, dataspace);
-        } else {
-            assert(!"unreachable");
-        }
+    hsize_t offset[3];
+    hsize_t count[3];
+    offset[0] = 0;
+    offset[1] = 0;
+    offset[2] = 0;
+    count[0] = NX_SUB;
+    count[1] = NY_SUB;
+    count[2] = NZ_SUB;
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
+
+    hsize_t dimsm[3];
+    dimsm[0] = NX_SUB;
+    dimsm[1] = NY_SUB;
+    dimsm[2] = NZ_SUB;
+    DataSpace memspace(RANK_OUT, dimsm);
+
+    hsize_t offset_out[3];
+    hsize_t count_out[3];
+    offset_out[0] = 0;
+    offset_out[1] = 0;
+    offset_out[2] = 0;
+    count_out[0] = NX_SUB;
+    count_out[1] = NY_SUB;
+    count_out[2] = NZ_SUB;
+    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
+
+    if constexpr (std::is_same_v<T, int>) {
+        dataset.read(data_read.data(), PredType::NATIVE_INT, memspace, dataspace);
+    } else if constexpr (std::is_same_v<T, double>) {
+        dataset.read(data_read.data(), PredType::NATIVE_DOUBLE, memspace, dataspace);
+    } else if constexpr (std::is_same_v<T, int8_t>) {
+        dataset.read(data_read.data(), PredType::NATIVE_INT8, memspace, dataspace);
+    } else {
+        assert(!"unreachable");
     }
-
-    return data_read;
+    file.close();
+    return std::move(data_read);  // prevent copy on compilers without NRVO
 }
 
-OrderList read_orders(Config &conf, uint32_t stk_code) {
+static std::vector<uint32_t> read_prev_close(const char *path_100x1000x1000, const char *trader) {
     using namespace H5;
 
-    const H5std_string file_name(conf.what_path("price").c_str());
+    std::string swhat("price"), spath(path_100x1000x1000), strader(trader);
+    std::filesystem::path dir(spath);
+    std::filesystem::path fname(swhat + strader + ".h5");
+    std::filesystem::path full_path = dir / fname;
+    // std::cout << full_path << std::endl;
 
-    H5File file(file_name, H5F_ACC_RDONLY);
-    DataSet dataset = file.openDataSet("prev_close");
+    const H5std_string FILE_NAME(full_path.c_str());
+    const H5std_string DATASET_NAME("prev_close");
+
+    H5File file(FILE_NAME, H5F_ACC_RDONLY);
+    DataSet dataset = file.openDataSet(DATASET_NAME);
 
     DataSpace dataspace = dataset.getSpace();
     int rank = dataspace.getSimpleExtentNdims();
 
-    double last_close = 0;
+    hsize_t dims_out[3];
+    dataspace.getSimpleExtentDims(dims_out, NULL);
 
-    hsize_t offset[1] = {stk_code};
-    hsize_t count[1] = {1};
+    // printf("rank %d, shape (%llu)\n", rank, dims_out[0]);
+
+    size_t NX_SUB;
+
+    const int RANK_OUT = 1;
+
+    NX_SUB = dims_out[0];
+
+    double *data_read = new double[NX_SUB];
+
+    hsize_t offset[1];
+    hsize_t count[1];
+    offset[0] = 0;
+    count[0] = NX_SUB;
+
     dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);  // select in file, this api can set api
 
-    hsize_t offset_out[1] = {0};
-    DataSpace memspace(1, count);
-    memspace.selectHyperslab(H5S_SELECT_SET, count, offset_out);  // select in memory
+    hsize_t dimsm[1];
+    dimsm[0] = NX_SUB;
+    DataSpace memspace(RANK_OUT, dimsm);
 
-    dataset.read(&last_close, PredType::NATIVE_DOUBLE, memspace, dataspace);
+    hsize_t offset_out[1];
+    hsize_t count_out[1];
+    offset_out[0] = 0;
 
-    return OrderList{
-        .last_close = last_close,
-        .length = ORDER_DX / NR_STOCKS * ORDER_DY * ORDER_DZ,
-        .order_id = read_column<int>(conf.what_path("order_id").c_str(), "order_id", stk_code),
-        .price = read_column<double>(conf.what_path("price").c_str(), "price", stk_code),
-        .volume = read_column<int>(conf.what_path("volume").c_str(), "volume", stk_code),
-        .type = read_column<int>(conf.what_path("type").c_str(), "type", stk_code),
-        .direction = read_column<int>(conf.what_path("direction").c_str(), "direction", stk_code),
-    };
+    count_out[0] = NX_SUB;
+    memspace.selectHyperslab(H5S_SELECT_SET, count_out, offset_out);  // select in memory
+
+    dataset.read(data_read, PredType::NATIVE_DOUBLE, memspace, dataspace);
+
+    std::vector<uint32_t> ret;
+    for (size_t i = 0; i < NX_SUB; i++) {
+        ret.push_back(std::lround(data_read[i] * 100));
+    }
+    file.close();
+    return ret;
+}
+
+std::shared_ptr<RawData> read_all(const char *path_100x1000x1000, const char *trader) {
+    INFO("reading orders\n");
+    auto fut_order_id = std::async(std::launch::async, read_one<int>, path_100x1000x1000, trader, "order_id");
+    auto fut_direction = std::async(std::launch::async, read_one<int8_t>, path_100x1000x1000, trader, "direction");
+    auto fut_type = std::async(std::launch::async, read_one<int8_t>, path_100x1000x1000, trader, "type");
+    auto fut_price = std::async(std::launch::async, read_one<double>, path_100x1000x1000, trader, "price");
+    auto fut_volume = std::async(std::launch::async, read_one<int>, path_100x1000x1000, trader, "volume");
+
+    std::vector<std::vector<int>> order_id_pos;
+    for (size_t i = 0; i < NR_STOCKS; i++) {
+        order_id_pos.emplace_back(NR_ORDERS_SINGLE_STK_HALF * 2, -1);
+    }
+
+    auto order_id = fut_order_id.get();
+
+    for (size_t x = 0; x < ORDER_DX; x++) {
+        for (size_t y = 0; y < ORDER_DY; y++) {
+            for (size_t z = 0; z < ORDER_DZ; z++) {
+                int idx = (x * ORDER_DY + y) * ORDER_DZ + z;
+                int id = order_id[idx] - 1;
+                order_id_pos[x % 10][id] = idx;
+            }
+        }
+    }
+
+    return std::make_shared<RawData>(RawData{
+        .prev_close = read_prev_close(path_100x1000x1000, trader),
+        .order_id_pos = std::move(order_id_pos),
+        .direction = std::move(fut_direction.get()),
+        .type = std::move(fut_type.get()),
+        .price = std::move(fut_price.get()),
+        .volume = std::move(fut_volume.get()),
+    });
 }

@@ -1,5 +1,6 @@
 HDF5 := h5c++
-HDF5FLAGS += -Wall -I./include -g 
+HDF5FLAGS += -Wall -Wno-pessimizing-move -I./include -DDEBUG_LEVEL=3 -ggdb
+# HDF5FLAGS += -fsanitize=undefined,address
 
 INCLUDES := $(shell find ./include -name "*.h")
 SRCS := $(shell find ./src -name "*.cpp")

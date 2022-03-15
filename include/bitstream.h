@@ -87,7 +87,8 @@ class IBitStream {
     }
 
    public:
-    IBitStream(uint32_t shard, std::shared_ptr<Stream<Packet>> stream) : shard(shard), stream(stream) {}
+    IBitStream(uint32_t shard, std::shared_ptr<Stream<Packet>> stream)
+        : buf{}, shard(shard), packets{}, stream(stream) {}
 
     uint32_t get_bits(int num) {
         uint32_t ret = 0;
