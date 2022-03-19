@@ -92,6 +92,10 @@ class Sender {
     void run() {
         while (std::optional<Packet> optional_packet = stream->next()) {
             Packet packet = std::move(optional_packet.value());
+            ScopeGuard guard([&] {
+                stream->send(std::move(packet));
+                INFO("packet requeued");
+            });
             packet.check_well_formedness();
 
             PacketHeader header{
@@ -102,6 +106,7 @@ class Sender {
 
             write_exact(*sockfd, (const char *)&header, sizeof header);
             write_exact(*sockfd, (const char *)packet.data.data(), packet.data.size());
+            guard.reset();
         }
     }
 };
@@ -115,8 +120,7 @@ std::optional<struct in_addr> parse_address(std::string address) {
     }
 }
 
-void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
-                    std::shared_ptr<Sink<Packet>> sink) {
+void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> queues[]) {
     struct sockaddr_in sa {
         .sin_family = AF_INET, .sin_port = htons(port), .sin_addr = {}
     };
@@ -134,7 +138,7 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
             throw "failed to create socket";
         }
 
-        // Fd sockfd(fd);
+        Fd sockfd(fd);
         int opt = 1;
         if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
             ERROR("setsockopt: %s", strerror(errno));
@@ -154,6 +158,7 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
 
         struct sockaddr_in client_address;
         socklen_t address_len = sizeof(client_address);
+
         while (true) {
             int new_socket = ::accept(fd, (struct sockaddr *)&client_address, &address_len);
             if (new_socket < 0) {
@@ -166,30 +171,41 @@ void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQu
 
             std::uint64_t key;
             read_exact(*shared_new_socket, (char *)&key, sizeof NETWORK_KEY);
-
             if (key != NETWORK_KEY) {
-                WARN("connection from %s:%d key verification failed", buf, ntohs(client_address.sin_port));
+                ERROR("connection from %s:%d key verification failed", buf, ntohs(client_address.sin_port));
                 continue;
             }
 
-            INFO("accepted connection from %s:%d", buf, ntohs(client_address.sin_port));
+            std::uint8_t id;
+            read_exact(*shared_new_socket, (char *)&id, sizeof id);
+
+            if (id != 0 && id != 1) {
+                ERROR("invalid id: %d\n", id);
+                continue;
+            }
+
+            INFO("accepted connection from %s:%d, id = %d", buf, ntohs(client_address.sin_port), id);
+            auto rxq = queues[id];
+            auto txq = queues[1 - id];
 
             // spawn receiver thread
             create_thread(std::string("network receiver"), [=] {
-                Receiver rx(shared_new_socket, sink);
+                Receiver rx(shared_new_socket, rxq);
                 rx.run();
             }).detach();
 
             // spawn sender thread
             create_thread(std::string("network sender"), [=] {
-                Sender tx(shared_new_socket, stream);
+                Sender tx(shared_new_socket, txq);
                 tx.run();
             }).detach();
+
+            break;
         }
     }).detach();
 }
 
-void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port,
+void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port, uint8_t self_id,
                      std::shared_ptr<PacketQueue> stream, std::shared_ptr<Sink<Packet>> sink) {
     struct sockaddr_in sa {
         .sin_family = AF_INET, .sin_port = htons(port), .sin_addr = addr
@@ -222,14 +238,20 @@ void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_add
 
         std::shared_ptr<Fd> fd = std::make_shared<Fd>(sockfd);
 
+        int retry_count = 0;
         while (::connect(sockfd, reinterpret_cast<const struct sockaddr *>(&sa), sizeof sa) < 0) {
             using namespace std::chrono_literals;
             WARN("connect: %s", strerror(errno));
+            if (++retry_count >= MAX_RETRY) {
+                ERROR("max retry attempt reached");
+                throw "failed to connect to the target server";
+            }
             INFO("attempt to retry connection");
             std::this_thread::sleep_for(1000ms);
         }
 
         write_exact(*fd, (const char *)&NETWORK_KEY, sizeof NETWORK_KEY);
+        write_exact(*fd, (const char *)&self_id, sizeof self_id);
 
         INFO("connected to %s", str_addr.c_str());
         // spawn receiver thread

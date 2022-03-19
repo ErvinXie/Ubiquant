@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "config.h"
 #include "network.h"
 
 using std::uint32_t;
@@ -81,6 +82,7 @@ class IBitStream {
         Packet packet = std::move(it->second);
         packets.erase(it);
         seq++;
+        metrics[shard].set_seq_no(seq);
         buf = move(packet.data);
         num_bits = packet.num_bits;
         cursor = 0;

@@ -29,6 +29,7 @@ using std::uint8_t;
 
 const std::uint64_t NETWORK_KEY = 0x6b6da5cff59af717;
 constexpr size_t CHUNK_SIZE = 255 * 1024;
+constexpr int MAX_RETRY = 10;
 
 extern std::atomic<size_t> network_bytes_tx, network_bytes_rx;
 
@@ -77,10 +78,8 @@ class PacketQueue final : public Sink<Packet>, public Stream<Packet> {
 
 std::optional<struct in_addr> parse_address(std::string address);
 
-void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> stream,
-                    std::shared_ptr<Sink<Packet>> sink);
+void network_listen(struct in_addr addr, uint16_t port, std::shared_ptr<PacketQueue> queues[]);
 
-void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port,
+void network_connect(struct in_addr addr, uint16_t port, struct in_addr self_addr, uint16_t self_port, uint8_t self_id,
                      std::shared_ptr<PacketQueue> stream, std::shared_ptr<Sink<Packet>> sink);
-
 #endif

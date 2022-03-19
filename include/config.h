@@ -16,10 +16,11 @@ struct Measure {
     std::atomic<size_t> order_processed{};
     std::atomic<size_t> trade_committed{};
     std::atomic<size_t> order_in_book{};
+    std::atomic<size_t> seq_no{};
 
     void info() {
-        printf("stock %zu: %zu orders_processed, %zu orders in book, %zu trades committed\n", stk_id + 1,
-               order_processed.load(), order_in_book.load(), trade_committed.load());
+        printf("stock %zu: %zu orders_processed, %zu orders in book, %zu trades committed, seq_no = %zu\n", stk_id + 1,
+               order_processed.load(), order_in_book.load(), trade_committed.load(), seq_no.load());
     }
 
     void increment_order_processed() { order_processed.store(order_processed + 1, std::memory_order_release); }
@@ -27,6 +28,8 @@ struct Measure {
     void increment_trade_commited() { trade_committed.store(trade_committed + 1, std::memory_order_release); }
 
     void set_order_in_book(size_t num) { order_in_book.store(num, std::memory_order_release); }
+
+    void set_seq_no(size_t num) { seq_no.store(num, std::memory_order_release); }
 };
 
 struct Metrics : std::vector<Measure> {
@@ -39,6 +42,7 @@ struct Metrics : std::vector<Measure> {
 
 struct Config {
     std::string data_path;
+    std::string out_path;
     int id;  // 0:Trader1, 1:Trader2, 2:Exchanger1, 3:Exchanger2
     std::string ip[4];
     int open_ports[4][4][3] = {};
@@ -75,6 +79,7 @@ struct Config {
 
         auto inconf = std::ifstream(argv[1]);
         inconf >> config.data_path;
+        inconf >> config.out_path;
         for (size_t i = 0; i < 4; i++) {
             inconf >> config.ip[i];
         }

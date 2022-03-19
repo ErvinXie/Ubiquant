@@ -140,6 +140,24 @@ struct Tee final : Sink<T> {
     }
 };
 
+template <typename T>
+struct ScopeGuard {
+   private:
+    T func;
+    bool valid = true;
+
+   public:
+    ScopeGuard(T &&t) : func(std::forward<T>(t)) {}
+
+    void reset() { valid = false; }
+
+    ~ScopeGuard() {
+        if (valid) {
+            func();
+        }
+    }
+};
+
 constexpr size_t NR_STOCKS = 10;
 
 constexpr size_t ORDER_DX = 500;

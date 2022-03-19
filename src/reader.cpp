@@ -149,6 +149,7 @@ static std::vector<uint32_t> read_prev_close(const char *path_100x1000x1000, con
 
     DataSpace dataspace = dataset.getSpace();
     int rank = dataspace.getSimpleExtentNdims();
+    assert(rank == 1);
 
     hsize_t dims_out[3];
     dataspace.getSimpleExtentDims(dims_out, NULL);
